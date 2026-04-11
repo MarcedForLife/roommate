@@ -134,7 +134,8 @@ class RoommateManager:
 
         for room in tracked_rooms:
             persons_home = sum(
-                1 for pid in room.bed_persons
+                1
+                for pid in room.bed_persons
                 if _entity_is_on(self.hass, pid, target_state=STATE_HOME)
             )
             if persons_home > 0 and room.get_occupant_count() < persons_home:

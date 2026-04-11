@@ -17,6 +17,7 @@ def auto_enable_custom_integrations(enable_custom_integrations):
     """Make the custom component discoverable by HA's loader."""
     yield
 
+
 MINIMAL_ROOM_CONFIG = {
     DOMAIN: {
         "rooms": {

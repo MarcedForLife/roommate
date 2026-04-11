@@ -24,9 +24,7 @@ from custom_components.roommate.const import (
 
 async def test_user_flow_creates_entry(hass: HomeAssistant) -> None:
     """Test the initial user config flow creates an entry."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
 
@@ -41,9 +39,7 @@ async def test_user_flow_single_instance(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(domain=DOMAIN, data={}, options={CONF_ROOMS: {}})
     entry.add_to_hass(hass)
 
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": SOURCE_USER}
-    )
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "single_instance_allowed"
 
@@ -78,8 +74,6 @@ async def test_import_flow_single_instance(hass: HomeAssistant) -> None:
         DOMAIN, context={"source": SOURCE_IMPORT}, data={}
     )
     assert result["type"] is FlowResultType.ABORT
-
-
 
 
 def _empty_options() -> dict:
@@ -138,9 +132,7 @@ async def test_options_add_room(hass: HomeAssistant) -> None:
     assert result["step_id"] == "room_devices"
 
     # Devices (skip all optional)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {}
-    )
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     assert result["step_id"] == "room_tuning"
 
     # Tuning (use defaults)
@@ -184,9 +176,7 @@ async def test_options_add_room_with_bed(hass: HomeAssistant) -> None:
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"lights": ["light.lamp"]}
     )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {}
-    )
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], _tuning_defaults()
     )
@@ -243,8 +233,6 @@ async def test_options_add_room_duplicate_name(hass: HomeAssistant) -> None:
     assert result["errors"]["name"] == "room_exists"
 
 
-
-
 async def test_options_edit_room(hass: HomeAssistant) -> None:
     """Test editing an existing room updates its config."""
     options = _empty_options()
@@ -277,9 +265,7 @@ async def test_options_edit_room(hass: HomeAssistant) -> None:
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"lights": ["light.new_lamp"]}
     )
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {}
-    )
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], _tuning_defaults()
     )
@@ -287,8 +273,6 @@ async def test_options_edit_room(hass: HomeAssistant) -> None:
     room = result["data"][CONF_ROOMS]["bedroom"]
     assert room["sensors"]["presence"] == "binary_sensor.new_motion"
     assert room["lights"] == ["light.new_lamp"]
-
-
 
 
 async def test_options_remove_room(hass: HomeAssistant) -> None:
@@ -310,8 +294,6 @@ async def test_options_remove_room(hass: HomeAssistant) -> None:
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert "bedroom" not in result["data"][CONF_ROOMS]
-
-
 
 
 async def test_options_global_settings(hass: HomeAssistant) -> None:

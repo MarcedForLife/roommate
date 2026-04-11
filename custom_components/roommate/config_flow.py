@@ -139,9 +139,7 @@ class RoommateOptionsFlow(OptionsFlow):
 
         return self.async_show_form(
             step_id="edit_room",
-            data_schema=vol.Schema(
-                {vol.Required("room"): _room_selector(rooms)}
-            ),
+            data_schema=vol.Schema({vol.Required("room"): _room_selector(rooms)}),
         )
 
     async def async_step_remove_room(self, user_input: dict[str, Any] | None = None):
@@ -156,9 +154,7 @@ class RoommateOptionsFlow(OptionsFlow):
 
         return self.async_show_form(
             step_id="remove_room",
-            data_schema=vol.Schema(
-                {vol.Required("room"): _room_selector(rooms)}
-            ),
+            data_schema=vol.Schema({vol.Required("room"): _room_selector(rooms)}),
         )
 
     def _placeholders(self) -> dict[str, str]:
@@ -205,9 +201,7 @@ class RoommateOptionsFlow(OptionsFlow):
                 vol.Required("presence"): EntitySelector({"domain": "binary_sensor"}),
                 vol.Optional("bed_presence"): EntitySelector({"domain": "binary_sensor"}),
                 vol.Optional("bed_occupants"): EntitySelector({"domain": "sensor"}),
-                vol.Optional("bed_persons"): EntitySelector(
-                    {"domain": "person", "multiple": True}
-                ),
+                vol.Optional("bed_persons"): EntitySelector({"domain": "person", "multiple": True}),
             }
         )
 
@@ -227,9 +221,7 @@ class RoommateOptionsFlow(OptionsFlow):
         suggested = {"lights": self._room_data.get(CONF_LIGHTS)}
         schema = vol.Schema(
             {
-                vol.Required("lights"): EntitySelector(
-                    {"domain": "light", "multiple": True}
-                ),
+                vol.Required("lights"): EntitySelector({"domain": "light", "multiple": True}),
             }
         )
 
@@ -275,9 +267,7 @@ class RoommateOptionsFlow(OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Optional("fans"): EntitySelector(
-                    {"domain": "fan", "multiple": True}
-                ),
+                vol.Optional("fans"): EntitySelector({"domain": "fan", "multiple": True}),
                 vol.Optional("speakers"): EntitySelector(
                     {"domain": "media_player", "multiple": True}
                 ),
@@ -319,9 +309,7 @@ class RoommateOptionsFlow(OptionsFlow):
 
         return self.async_show_form(
             step_id="room_tuning",
-            data_schema=self.add_suggested_values_to_schema(
-                _tuning_schema(), suggested
-            ),
+            data_schema=self.add_suggested_values_to_schema(_tuning_schema(), suggested),
             description_placeholders=self._placeholders(),
         )
 
@@ -331,12 +319,10 @@ class RoommateOptionsFlow(OptionsFlow):
             # Preserve per-light inhibit config for existing sleep lights
             new_ids = user_input.get("sleep_lights", [])
             existing_map = {
-                sl[CONF_ENTITY_ID]: sl
-                for sl in self._options.get(CONF_SLEEP_LIGHTS, [])
+                sl[CONF_ENTITY_ID]: sl for sl in self._options.get(CONF_SLEEP_LIGHTS, [])
             }
             self._options[CONF_SLEEP_LIGHTS] = [
-                existing_map.get(lid, {CONF_ENTITY_ID: lid, CONF_INHIBIT: []})
-                for lid in new_ids
+                existing_map.get(lid, {CONF_ENTITY_ID: lid, CONF_INHIBIT: []}) for lid in new_ids
             ]
 
             self._options[CONF_SLEEP_MODES] = user_input.get("sleep_modes", [])
@@ -348,22 +334,15 @@ class RoommateOptionsFlow(OptionsFlow):
                 self._options.pop(CONF_ILLUMINANCE_SENSOR, None)
 
             self._options[CONF_ILLUMINANCE_THRESHOLD] = float(
-                user_input.get(
-                    CONF_ILLUMINANCE_THRESHOLD, DEFAULT_ILLUMINANCE_THRESHOLD
-                )
+                user_input.get(CONF_ILLUMINANCE_THRESHOLD, DEFAULT_ILLUMINANCE_THRESHOLD)
             )
             self._options[CONF_SLEEP_LIGHT_TRANSITION] = int(
-                user_input.get(
-                    CONF_SLEEP_LIGHT_TRANSITION, DEFAULT_SLEEP_LIGHT_TRANSITION
-                )
+                user_input.get(CONF_SLEEP_LIGHT_TRANSITION, DEFAULT_SLEEP_LIGHT_TRANSITION)
             )
 
             return self.async_create_entry(data=self._options)
 
-        current_light_ids = [
-            sl[CONF_ENTITY_ID]
-            for sl in self._options.get(CONF_SLEEP_LIGHTS, [])
-        ]
+        current_light_ids = [sl[CONF_ENTITY_ID] for sl in self._options.get(CONF_SLEEP_LIGHTS, [])]
         suggested = {
             "sleep_lights": current_light_ids or None,
             "sleep_modes": self._options.get(CONF_SLEEP_MODES) or None,
@@ -378,15 +357,9 @@ class RoommateOptionsFlow(OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Optional("sleep_lights"): EntitySelector(
-                    {"domain": "light", "multiple": True}
-                ),
-                vol.Optional("sleep_modes"): EntitySelector(
-                    {"domain": "switch", "multiple": True}
-                ),
-                vol.Optional("illuminance_sensor"): EntitySelector(
-                    {"domain": "sensor"}
-                ),
+                vol.Optional("sleep_lights"): EntitySelector({"domain": "light", "multiple": True}),
+                vol.Optional("sleep_modes"): EntitySelector({"domain": "switch", "multiple": True}),
+                vol.Optional("illuminance_sensor"): EntitySelector({"domain": "sensor"}),
                 vol.Required(CONF_ILLUMINANCE_THRESHOLD): NumberSelector(
                     {
                         "min": 0,
@@ -419,8 +392,7 @@ def _room_selector(rooms: dict) -> SelectSelector:
     return SelectSelector(
         {
             "options": [
-                {"value": name, "label": name.replace("_", " ").title()}
-                for name in sorted(rooms)
+                {"value": name, "label": name.replace("_", " ").title()} for name in sorted(rooms)
             ],
             "mode": "dropdown",
         }
