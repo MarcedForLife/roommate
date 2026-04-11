@@ -1,8 +1,8 @@
 # Roommate
 
-[![GitHub Release](https://img.shields.io/github/v/release/MarcedForLife/room-auto-presence?style=for-the-badge)](https://github.com/MarcedForLife/room-auto-presence/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/MarcedForLife/roommate?style=for-the-badge)](https://github.com/MarcedForLife/roommate/releases)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![License](https://img.shields.io/github/license/MarcedForLife/room-auto-presence.svg?style=for-the-badge)](LICENSE.md)
+[![License](https://img.shields.io/github/license/MarcedForLife/roommate.svg?style=for-the-badge)](LICENSE.md)
 
 A Home Assistant integration that automates room behaviour based on presence and bed occupancy. Define your rooms, sensors, and devices in YAML, and the integration handles the rest.
 
@@ -138,7 +138,7 @@ All entities are grouped under HA devices for easy dashboard organization.
 
 ### HACS
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MarcedForLife&repository=room-auto-presence&category=Integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MarcedForLife&repository=roommate&category=Integration)
 
 Or manually: add this repository as a custom repository in HACS, then install "Roommate."
 

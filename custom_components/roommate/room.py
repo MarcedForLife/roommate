@@ -46,6 +46,7 @@ from .const import (
 if TYPE_CHECKING:
     from .binary_sensor import RoommateSensor
     from .manager import RoommateManager
+    from .sensor import RoomDiagnosticSensor
     from .switch import BedAutomationsSwitch, PresenceLightingSwitch
 
 _LOGGER = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ class Room:
         self.presence_entity: RoommateSensor | None = None
         self.presence_lighting_switch: PresenceLightingSwitch | None = None
         self.bed_automations_switch: BedAutomationsSwitch | None = None
+        self.diagnostic_entity: RoomDiagnosticSensor | None = None
 
     @property
     def _bed_sensors(self) -> dict[str, Any]:
@@ -146,6 +148,18 @@ class Room:
     def bed_automations_enabled(self) -> bool:
         return self._bed_automations_enabled
 
+    @property
+    def bed_exit_timer_active(self) -> bool:
+        return self._bed_exit_timer is not None
+
+    @property
+    def presence_off_timer_active(self) -> bool:
+        return self._presence_off_timer is not None
+
+    @property
+    def snapshot_active(self) -> bool:
+        return self._pre_exit_snapshot is not None
+
     def is_lights_on(self) -> bool:
         return any(_entity_is_on(self.hass, light) for light in self.light_entities)
 
@@ -196,6 +210,8 @@ class Room:
 
         if self.presence_entity:
             self.presence_entity.async_write_ha_state()
+        if self.diagnostic_entity:
+            self.diagnostic_entity.async_write_ha_state()
 
     @callback
     def handle_bed_change(self, old: str, new: str) -> None:
@@ -208,6 +224,9 @@ class Room:
             self.hass.async_create_task(self._on_getting_in_bed())
         elif old == STATE_ON and new != STATE_ON:
             self._start_bed_exit_timer()
+
+        if self.diagnostic_entity:
+            self.diagnostic_entity.async_write_ha_state()
 
     @callback
     def handle_occupant_change(self, old: str, new: str) -> None:
@@ -233,6 +252,9 @@ class Room:
             self.hass.async_create_task(self._manager.async_on_waking(self))
             self.hass.async_create_task(self._manager.async_on_everyone_up(self))
 
+        if self.diagnostic_entity:
+            self.diagnostic_entity.async_write_ha_state()
+
     @callback
     def handle_light_change(self, old: str, new: str, context: Context | None) -> None:
         if self._is_our_context(context):
@@ -252,6 +274,8 @@ class Room:
 
         if self.presence_lighting_switch:
             self.presence_lighting_switch.async_write_ha_state()
+        if self.diagnostic_entity:
+            self.diagnostic_entity.async_write_ha_state()
 
     async def _on_presence_detected(self) -> None:
         if not self._presence_lighting_enabled:

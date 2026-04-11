@@ -48,8 +48,6 @@ async def test_presence_combined_with_bed(
     assert not room.is_present
 
 
-
-
 async def test_manual_override_off(
     hass: HomeAssistant,
     setup_integration: RoommateManager,
@@ -100,8 +98,6 @@ async def test_manual_override_not_triggered_when_absent(
     assert room.presence_lighting_enabled
 
 
-
-
 async def test_occupant_count(
     hass: HomeAssistant,
     setup_integration: RoommateManager,
@@ -141,8 +137,6 @@ async def test_occupant_count_handles_invalid_state(
     assert room.get_occupant_count() == 0
 
 
-
-
 async def test_is_lights_on(
     hass: HomeAssistant,
     setup_integration: RoommateManager,
@@ -154,8 +148,6 @@ async def test_is_lights_on(
 
     hass.states.async_set("light.lamp_1", STATE_ON)
     assert room.is_lights_on()
-
-
 
 
 async def test_on_presence_detected_calls_light_service(
@@ -230,8 +222,6 @@ async def test_on_getting_in_bed_skipped_when_lights_off(
         mock.assert_not_called()
 
 
-
-
 async def test_on_leaving_bed_turns_off_fans(
     hass: HomeAssistant,
     setup_integration: RoommateManager,
@@ -264,8 +254,6 @@ async def test_on_leaving_bed_stops_speakers(
         assert speaker_calls[0].args[1] == "media_stop"
 
     room.cancel_timers()
-
-
 
 
 async def test_snapshot_restore_on_quick_return(
@@ -309,8 +297,6 @@ async def test_snapshot_expires(
     assert room._pre_exit_snapshot is None
 
 
-
-
 async def test_bed_automations_disabled_skips_bed_change(
     hass: HomeAssistant,
     setup_integration: RoommateManager,
@@ -321,8 +307,6 @@ async def test_bed_automations_disabled_skips_bed_change(
     with patch.object(room, "_on_getting_in_bed", new_callable=AsyncMock) as mock:
         room.handle_bed_change("off", STATE_ON)
         mock.assert_not_called()
-
-
 
 
 async def test_guest_mode(
@@ -341,8 +325,6 @@ async def test_bed_persons_drives_sleep_participation(
 ) -> None:
     room = setup_integration.rooms["bedroom"]
     assert room.bed_persons == ["person.alice", "person.bob"]
-
-
 
 
 async def test_everyone_in_bed_check(

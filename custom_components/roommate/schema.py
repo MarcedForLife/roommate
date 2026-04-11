@@ -125,9 +125,7 @@ CONFIG_SCHEMA = vol.Schema(
                 vol.Optional(CONF_SLEEP_LIGHTS, default=[]): vol.All(
                     cv.ensure_list, [SLEEP_LIGHT_SCHEMA], _normalize_sleep_lights
                 ),
-                vol.Optional(CONF_SLEEP_MODES, default=[]): vol.All(
-                    cv.ensure_list, [cv.entity_id]
-                ),
+                vol.Optional(CONF_SLEEP_MODES, default=[]): vol.All(cv.ensure_list, [cv.entity_id]),
                 vol.Optional(CONF_ILLUMINANCE_SENSOR): cv.entity_id,
                 vol.Optional(
                     CONF_ILLUMINANCE_THRESHOLD,

@@ -3,8 +3,8 @@
   "name": "Roommate",
   "codeowners": ["@MarcedForLife"],
   "config_flow": true,
-  "documentation": "https://github.com/MarcedForLife/room-auto-presence",
-  "issue_tracker": "https://github.com/MarcedForLife/room-auto-presence/issues",
+  "documentation": "https://github.com/MarcedForLife/roommate",
   "iot_class": "local_push",
+  "issue_tracker": "https://github.com/MarcedForLife/roommate/issues",
   "version": "0.1.0"
 }

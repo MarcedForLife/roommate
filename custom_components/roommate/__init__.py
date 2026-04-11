@@ -32,7 +32,7 @@ from .schema import CONFIG_SCHEMA  # noqa: F401 (used by HA)
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.SWITCH, Platform.BUTTON]
+PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.SWITCH, Platform.BUTTON]
 
 
 def _apply_defaults(config: dict[str, Any]) -> dict[str, Any]:
