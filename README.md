@@ -1,10 +1,19 @@
+<img src="https://raw.githubusercontent.com/MarcedForLife/roommate/main/custom_components/roommate/brand/icon.png"
+     alt="Roommate icon"
+     height="55"
+     align="right"
+     style="float: right; margin: 10px 0px 20px 20px;" />
+
 # Roommate
 
-[![GitHub Release](https://img.shields.io/github/v/release/MarcedForLife/roommate?style=for-the-badge)](https://github.com/MarcedForLife/roommate/releases)
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![License](https://img.shields.io/github/license/MarcedForLife/roommate.svg?style=for-the-badge)](LICENSE.md)
+[![GitHub Release](https://img.shields.io/github/v/release/MarcedForLife/roommate.svg?style=flat-square)](https://github.com/MarcedForLife/roommate/releases)
+[![GitHub Downloads](https://img.shields.io/github/downloads/MarcedForLife/roommate/total.svg?style=flat-square)](https://github.com/MarcedForLife/roommate/releases)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://github.com/hacs/integration)
+[![License](https://img.shields.io/github/license/MarcedForLife/roommate.svg?style=flat-square)](LICENSE.md)
 
 A Home Assistant integration that automates room behaviour based on presence and bed occupancy. Define your rooms, sensors, and devices in YAML, and the integration handles the rest.
+
+<br clear="right"/>
 
 ## Features
 
@@ -142,10 +151,14 @@ All entities are grouped under HA devices for easy dashboard organization.
 
 Or manually: add this repository as a custom repository in HACS, then install "Roommate."
 
-After installing, add the configuration to your `configuration.yaml` and restart Home Assistant.
-
 ### Manual
 
 1. Copy `custom_components/roommate` to your HA `custom_components/` directory
-2. Add the configuration to your `configuration.yaml`
-3. Restart Home Assistant
+2. Restart Home Assistant
+
+### Setup
+
+After installing, you can set up Roommate in two ways:
+
+- **UI**: Go to Settings > Devices & Services > Add Integration, search for "Roommate"
+- **YAML**: Add the configuration to your `configuration.yaml` and restart Home Assistant
