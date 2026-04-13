@@ -1,11 +1,5 @@
 {
   "config": {
-    "step": {
-      "user": {
-        "title": "Roommate",
-        "description": "Set up room presence automation. You can add rooms and configure settings after setup."
-      }
-    },
     "abort": {
       "single_instance_allowed": "Roommate is already configured."
     }
