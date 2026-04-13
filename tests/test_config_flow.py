@@ -23,12 +23,8 @@ from custom_components.roommate.const import (
 
 
 async def test_user_flow_creates_entry(hass: HomeAssistant) -> None:
-    """Test the initial user config flow creates an entry."""
+    """Test the initial user config flow creates an entry immediately."""
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "user"
-
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Roommate"
     assert result["options"][CONF_ROOMS] == {}
