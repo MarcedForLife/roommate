@@ -50,24 +50,21 @@ class RoommateConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
-        """Confirm integration setup."""
+        """Create the integration entry. Configuration happens via options flow."""
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
 
-        if user_input is not None:
-            return self.async_create_entry(
-                title="Roommate",
-                data={},
-                options={
-                    CONF_ROOMS: {},
-                    CONF_SLEEP_LIGHTS: [],
-                    CONF_SLEEP_MODES: [],
-                    CONF_ILLUMINANCE_THRESHOLD: DEFAULT_ILLUMINANCE_THRESHOLD,
-                    CONF_SLEEP_LIGHT_TRANSITION: DEFAULT_SLEEP_LIGHT_TRANSITION,
-                },
-            )
-
-        return self.async_show_form(step_id="user")
+        return self.async_create_entry(
+            title="Roommate",
+            data={},
+            options={
+                CONF_ROOMS: {},
+                CONF_SLEEP_LIGHTS: [],
+                CONF_SLEEP_MODES: [],
+                CONF_ILLUMINANCE_THRESHOLD: DEFAULT_ILLUMINANCE_THRESHOLD,
+                CONF_SLEEP_LIGHT_TRANSITION: DEFAULT_SLEEP_LIGHT_TRANSITION,
+            },
+        )
 
     async def async_step_import(self, import_data: dict[str, Any]):
         """Import configuration from YAML."""
