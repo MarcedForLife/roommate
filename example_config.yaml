@@ -1,0 +1,50 @@
+# Example Roommate configuration.
+# Add this to your configuration.yaml.
+
+roommate:
+  illuminance_sensor: sensor.illuminance
+  illuminance_threshold: 4000
+  sleep_lights:
+    - entity_id: light.living_room_lights
+      inhibit:
+        - switch.theatre_lighting
+    - light.toilet_light
+  sleep_modes:
+    - switch.adaptive_lighting_sleep_mode_living_room
+
+  rooms:
+    bedroom:
+      sensors:
+        presence: binary_sensor.bedroom_presence_sensor_presence
+        bed:
+          presence: binary_sensor.bed_presence_sensor_occupancy
+          occupants: sensor.bed_presence_sensor_occupants
+          persons:
+            - person.alice
+            - person.bob
+      lights:
+        - light.bedside_lamp_1
+        - light.bedside_lamp_2
+      fans:
+        - fan.bedroom_fan_1
+        - fan.bedroom_fan_2
+      speakers:
+        - media_player.bedroom_speaker
+      adaptive_lighting:
+        switch: switch.adaptive_lighting_bedroom
+        sleep_mode: switch.adaptive_lighting_sleep_mode_bedroom
+      wake_transition: 30
+      dim_brightness: 5
+      recently_on_threshold: 8
+      transition_on: 2
+      transition_off: 5
+      bed_exit_delay: 10
+      bed_return_timeout: 180
+
+    # Example: a guest bedroom with only a motion sensor and lights
+    # guest_bedroom:
+    #   sensors:
+    #     presence: binary_sensor.guest_bedroom_presence_sensor_presence
+    #   lights:
+    #     - light.guest_lamp
+    #   dim_brightness: 15

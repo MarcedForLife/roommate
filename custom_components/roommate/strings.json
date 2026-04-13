@@ -1,0 +1,119 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Roommate",
+        "description": "Set up room presence automation. You can add rooms and configure settings after setup."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Roommate is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "menu_options": {
+          "add_room": "Add room",
+          "edit_room": "Edit room",
+          "remove_room": "Remove room",
+          "global_settings": "Global settings"
+        }
+      },
+      "add_room": {
+        "title": "Add Room",
+        "data": {
+          "name": "Room name"
+        }
+      },
+      "edit_room": {
+        "title": "Edit Room",
+        "data": {
+          "room": "Room"
+        }
+      },
+      "remove_room": {
+        "title": "Remove Room",
+        "description": "Select a room to remove. The integration will reload after removal.",
+        "data": {
+          "room": "Room"
+        }
+      },
+      "room_sensors": {
+        "title": "Sensors",
+        "description": "Configure sensors for {room_name}. Bed fields are optional, but at least a bed presence or occupants sensor is needed to enable bed automations.",
+        "data": {
+          "presence": "Presence sensor",
+          "bed_presence": "Bed presence sensor",
+          "bed_occupants": "Bed occupants sensor",
+          "bed_persons": "Bed persons"
+        }
+      },
+      "room_lights": {
+        "title": "Lights",
+        "description": "Select lights for {room_name}.",
+        "data": {
+          "lights": "Lights"
+        }
+      },
+      "room_devices": {
+        "title": "Devices & Features",
+        "description": "Configure additional devices and features for {room_name}. All fields are optional.",
+        "data": {
+          "fans": "Fans",
+          "speakers": "Speakers",
+          "al_switch": "Adaptive Lighting switch",
+          "al_sleep_mode": "Adaptive Lighting sleep mode switch",
+          "wake_transition": "Wake transition duration"
+        }
+      },
+      "room_tuning": {
+        "title": "Tuning",
+        "description": "Fine-tune automation parameters for {room_name}.",
+        "data": {
+          "dim_brightness": "Dim brightness",
+          "recently_on_threshold": "Recently-on threshold",
+          "transition_on": "Turn on transition",
+          "transition_off": "Turn off transition",
+          "transition_dim": "Dim transition",
+          "bed_exit_delay": "Bed exit delay",
+          "bed_return_timeout": "Quick-return timeout",
+          "presence_off_delay": "Presence off delay"
+        },
+        "data_description": {
+          "dim_brightness": "Brightness level when getting in bed",
+          "recently_on_threshold": "Skip dimming and turn off instead if lights were on for less than this",
+          "transition_on": "Light transition when presence detected",
+          "transition_off": "Light transition when presence ends",
+          "transition_dim": "Light transition when dimming for bed",
+          "bed_exit_delay": "Debounce delay before processing bed exit",
+          "bed_return_timeout": "Window to restore previous room state on quick bed return",
+          "presence_off_delay": "Debounce delay before processing presence off"
+        }
+      },
+      "global_settings": {
+        "title": "Global Settings",
+        "description": "Configure household-level sleep and illuminance settings.",
+        "data": {
+          "sleep_lights": "Sleep lights",
+          "sleep_modes": "Sleep mode switches",
+          "illuminance_sensor": "Outdoor illuminance sensor",
+          "illuminance_threshold": "Illuminance threshold",
+          "sleep_light_transition": "Sleep light transition"
+        },
+        "data_description": {
+          "sleep_lights": "Lights turned off when everyone is in bed and turned on when someone gets up",
+          "sleep_modes": "Switches activated when everyone is in bed and deactivated when everyone is up",
+          "illuminance_sensor": "Skip turning on sleep lights when outdoor brightness exceeds the threshold",
+          "illuminance_threshold": "Illuminance level above which sleep lights are not activated",
+          "sleep_light_transition": "Fade duration when turning sleep lights on or off"
+        }
+      }
+    },
+    "error": {
+      "bed_requires_sensor": "Bed configuration requires at least a presence or occupants sensor.",
+      "invalid_name": "Invalid room name. Use letters, numbers, and spaces.",
+      "room_exists": "A room with this name already exists."
+    }
+  }
+}
