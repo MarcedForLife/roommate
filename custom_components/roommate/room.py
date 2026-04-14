@@ -41,6 +41,7 @@ from .const import (
     CONF_TRANSITION_OFF,
     CONF_TRANSITION_ON,
     CONF_WAKE_TRANSITION,
+    RECENTLY_ON_OFF_TRANSITION,
 )
 
 if TYPE_CHECKING:
@@ -321,7 +322,7 @@ class Room:
                 "light",
                 "turn_off",
                 entity_id=self.light_entities,
-                transition=1,
+                transition=RECENTLY_ON_OFF_TRANSITION,
             )
         else:
             dim = self.config[CONF_DIM_BRIGHTNESS]
