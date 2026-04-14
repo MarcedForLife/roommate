@@ -347,12 +347,13 @@ class Room:
 
         coros: list = []
 
+        self._presence_lighting_enabled = True
+        if self.presence_lighting_switch:
+            self.presence_lighting_switch.async_write_ha_state()
+
         if self.is_lights_on():
             if self.al_switch_id and self.light_entities:
                 coros.append(self.restore_adaptive_lighting())
-            self._presence_lighting_enabled = True
-            if self.presence_lighting_switch:
-                self.presence_lighting_switch.async_write_ha_state()
         elif self.config.get(CONF_WAKE_TRANSITION) and self._is_present:
             coros.append(
                 self._call_service(
