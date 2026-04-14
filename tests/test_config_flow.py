@@ -158,7 +158,7 @@ def _empty_options() -> dict:
 
 
 def _tuning_defaults() -> dict:
-    return {key: default for key, (default, _, _, _) in TUNING_PARAMS.items()}
+    return {key: default for key, (default, *_rest) in TUNING_PARAMS.items()}
 
 
 async def _start_options_flow(hass, entry):

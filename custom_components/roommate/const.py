@@ -48,18 +48,24 @@ CONF_SLEEP_LIGHT_TRANSITION = "sleep_light_transition"
 # Global defaults
 DEFAULT_ILLUMINANCE_THRESHOLD = 4000
 DEFAULT_SLEEP_LIGHT_TRANSITION = 5
+RECENTLY_ON_OFF_TRANSITION = 1
 
-# Room tuning parameters, keyed by config name: (default, min, max, unit).
-# Used by the YAML schema, config flow selectors, and _apply_defaults.
-TUNING_PARAMS: dict[str, tuple[int, int, int, str]] = {
-    CONF_DIM_BRIGHTNESS: (5, 1, 100, "%"),
-    CONF_RECENTLY_ON_THRESHOLD: (8, 0, 60, "s"),
-    CONF_TRANSITION_ON: (2, 0, 30, "s"),
-    CONF_TRANSITION_OFF: (5, 0, 30, "s"),
-    CONF_TRANSITION_DIM: (5, 0, 30, "s"),
-    CONF_BED_EXIT_DELAY: (10, 0, 120, "s"),
-    CONF_BED_RETURN_TIMEOUT: (180, 0, 600, "s"),
-    CONF_PRESENCE_OFF_DELAY: (0, 0, 120, "s"),
+# Room state values (used by diagnostic sensor)
+STATE_VACANT = "vacant"
+STATE_PRESENT = "present"
+STATE_IN_BED = "in_bed"
+
+# Room tuning parameters, keyed by config name: (default, min, max, unit, display name).
+# Used by the YAML schema, config flow, number entities, and _apply_defaults.
+TUNING_PARAMS: dict[str, tuple[int, int, int, str, str]] = {
+    CONF_DIM_BRIGHTNESS: (5, 1, 100, "%", "Dim Brightness"),
+    CONF_RECENTLY_ON_THRESHOLD: (8, 0, 60, "s", "Recently-on Threshold"),
+    CONF_TRANSITION_ON: (2, 0, 30, "s", "Turn On Transition"),
+    CONF_TRANSITION_OFF: (5, 0, 30, "s", "Turn Off Transition"),
+    CONF_TRANSITION_DIM: (5, 0, 30, "s", "Dim Transition"),
+    CONF_BED_EXIT_DELAY: (10, 0, 120, "s", "Bed Exit Delay"),
+    CONF_BED_RETURN_TIMEOUT: (180, 0, 600, "s", "Quick-return Timeout"),
+    CONF_PRESENCE_OFF_DELAY: (0, 0, 120, "s", "Presence Off Delay"),
 }
 
 # Wake transition range (optional, no default)

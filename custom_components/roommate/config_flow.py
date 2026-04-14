@@ -198,7 +198,7 @@ class RoomSetupMixin:
 
         suggested = {
             key: self._room_data.get(key, default)
-            for key, (default, _low, _high, _unit) in TUNING_PARAMS.items()
+            for key, (default, *_rest) in TUNING_PARAMS.items()
         }
 
         return self.async_show_form(
@@ -482,7 +482,7 @@ def _room_selector(rooms: dict) -> SelectSelector:
 def _tuning_schema() -> vol.Schema:
     """Build the tuning parameter schema from the central TUNING_PARAMS table."""
     fields: dict = {}
-    for key, (_default, low, high, unit) in TUNING_PARAMS.items():
+    for key, (_default, low, high, unit, _name) in TUNING_PARAMS.items():
         fields[vol.Required(key)] = NumberSelector(
             {
                 "min": low,

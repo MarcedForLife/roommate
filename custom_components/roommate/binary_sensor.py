@@ -7,6 +7,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -55,7 +56,7 @@ class RoommateSensor(BinarySensorEntity):
         bed_id = self._room.bed_sensor_id
         if bed_id:
             bed_state = self.hass.states.get(bed_id)
-            if bed_state and bed_state.state == "on":
+            if bed_state and bed_state.state == STATE_ON:
                 return "mdi:bed"
         return "mdi:motion-sensor"
 
