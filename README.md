@@ -126,12 +126,12 @@ rooms:
 
 Per room (using "bedroom" as example):
 
-| Entity                                              | Created when                 | Purpose                           |
-| --------------------------------------------------- | ---------------------------- | --------------------------------- |
-| `binary_sensor.roommate_presence_bedroom`           | Always                       | Combined presence (motion OR bed) |
-| `switch.roommate_presence_automations_bedroom`      | Always                       | Toggle presence-based lighting    |
-| `switch.roommate_bed_automations_bedroom`           | Bed sensor configured        | Toggle bed-related automations    |
-| `button.roommate_restore_auto_brightness_bedroom`   | Adaptive lighting configured | Restore auto-brightness           |
+| Entity                                                 | Created when                 | Purpose                           |
+| ------------------------------------------------------ | ---------------------------- | --------------------------------- |
+| `binary_sensor.roommate_bedroom_presence`              | Always                       | Combined presence (motion OR bed) |
+| `switch.roommate_bedroom_presence_automations`         | Always                       | Toggle presence-based lighting    |
+| `switch.roommate_bedroom_bed_automations`              | Bed sensor configured        | Toggle bed-related automations    |
+| `button.roommate_bedroom_restore_auto_brightness`      | Adaptive lighting configured | Restore auto-brightness           |
 
 Global:
 
