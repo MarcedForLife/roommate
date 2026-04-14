@@ -28,7 +28,7 @@ async def test_sensor_vacant(
     room = setup_integration.rooms["bedroom"]
     sensor = _make_sensor(room)
 
-    assert sensor.native_value == "vacant"
+    assert sensor.native_value == "empty"
     attrs = sensor.extra_state_attributes
     assert attrs["presence_lighting"] == "active"
     assert attrs["bed_automations"] == "enabled"

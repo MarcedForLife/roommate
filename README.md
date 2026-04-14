@@ -11,7 +11,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://github.com/hacs/integration)
 [![License](https://img.shields.io/github/license/MarcedForLife/roommate.svg?style=flat-square)](LICENSE.md)
 
-A Home Assistant integration that automates room behaviour based on presence and bed occupancy. Define your rooms, sensors, and devices in YAML, and the integration handles the rest.
+A Home Assistant integration that automates room behaviour based on presence and bed occupancy. Configure via the UI or YAML, and the integration handles the rest.
 
 ## Features
 
@@ -22,7 +22,7 @@ A Home Assistant integration that automates room behaviour based on presence and
 - **Quick return snapshot** that restores room state if you get back in bed within a configurable window
 - **Adaptive lighting** integration (restore auto-brightness on bed exit)
 - **Guest mode** switch to suppress sleep light activation
-- Optional sensors (bed, occupants, illuminance, temperature, humidity) per room
+- **Live tuning** via number entities on the device page
 
 ## How it works
 
@@ -32,22 +32,22 @@ Each room follows a state lifecycle based on sensor events:
 stateDiagram-v2
     direction LR
 
-    Vacant --> Present: Presence detected
-    Present --> Vacant: Presence ended
+    Empty --> Present: Presence detected
+    Present --> Empty: Presence ended
 
     Present --> InBed: Bed occupied
     InBed --> Present: Bed exit (debounced)
 
     Present --> Overridden: Manual light off
-    Overridden --> Present: Manual light on
+    Overridden --> Present: Manual light on\nor bed empty
 ```
 
-| State          | Room behaviour                                     |
-| -------------- | -------------------------------------------------- |
-| **Vacant**     | Lights off                                         |
-| **Present**    | Lights on (adaptive)                               |
-| **In Bed**     | Lights dimmed or off, fans/speakers controlled     |
-| **Overridden** | Presence lighting suppressed until manual light-on |
+| State          | Room behaviour                                                  |
+| -------------- | --------------------------------------------------------------- |
+| **Empty**      | Lights off                                                      |
+| **Present**    | Lights on (adaptive)                                            |
+| **In Bed**     | Lights dimmed or off, fans/speakers controlled                  |
+| **Overridden** | Presence lighting suppressed until manual light-on or bed empty |
 
 When a room has `bed.persons` configured, it participates in the household sleep/wake lifecycle:
 
@@ -85,7 +85,6 @@ roommate:
           persons:
             - person.alice
             - person.bob
-        # Future: illuminance, temperature, humidity
 
       lights:                                          # required
         - light.bedside_lamp_1
@@ -126,20 +125,24 @@ rooms:
 
 Per room (using "bedroom" as example):
 
-| Entity                                                 | Created when                 | Purpose                           |
-| ------------------------------------------------------ | ---------------------------- | --------------------------------- |
-| `binary_sensor.roommate_bedroom_presence`              | Always                       | Combined presence (motion OR bed) |
-| `switch.roommate_bedroom_presence_automations`         | Always                       | Toggle presence-based lighting    |
-| `switch.roommate_bedroom_bed_automations`              | Bed sensor configured        | Toggle bed-related automations    |
-| `button.roommate_bedroom_restore_auto_brightness`      | Adaptive lighting configured | Restore auto-brightness           |
+| Entity                                            | Created when                 | Purpose                                 |
+| ------------------------------------------------- | ---------------------------- | --------------------------------------- |
+| `binary_sensor.roommate_bedroom_presence`         | Always                       | Combined presence (motion OR bed)       |
+| `sensor.roommate_bedroom_room_state`              | Always                       | Diagnostic state (empty/present/in_bed) |
+| `switch.roommate_bedroom_presence_automations`    | Always                       | Toggle presence-based lighting          |
+| `switch.roommate_bedroom_bed_automations`         | Bed sensor configured        | Toggle bed-related automations          |
+| `button.roommate_bedroom_restore_auto_brightness` | Adaptive lighting configured | Restore auto-brightness                 |
+| `number.roommate_bedroom_*`                       | Per tuning param             | Adjust timing and brightness values     |
 
 Global:
 
-| Entity                       | Purpose                         |
-| ---------------------------- | ------------------------------- |
-| `switch.roommate_guest_mode` | Suppress sleep light activation |
+| Entity                                   | Created when                  | Purpose                         |
+| ---------------------------------------- | ----------------------------- | ------------------------------- |
+| `switch.roommate_guest_mode`             | Always                        | Suppress sleep light activation |
+| `number.roommate_sleep_light_transition` | Sleep lights configured       | Sleep light fade duration       |
+| `number.roommate_illuminance_threshold`  | Illuminance sensor configured | Lux threshold for sleep lights  |
 
-All entities are grouped under HA devices for easy dashboard organization.
+All entities are grouped under per-room "Roommate {Room}" devices or the global "Roommate" hub device.
 
 ## Installation
 
