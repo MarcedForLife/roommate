@@ -17,7 +17,7 @@ def _make_sensor(room) -> RoomDiagnosticSensor:
     """
     sensor = RoomDiagnosticSensor.__new__(RoomDiagnosticSensor)
     sensor._room = room
-    sensor._attr_unique_id = f"roommate_room_state_{room.name}"
+    sensor._attr_unique_id = f"roommate_{room.name}_room_state"
     return sensor
 
 

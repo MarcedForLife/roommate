@@ -34,15 +34,14 @@ class RoommateSensor(BinarySensorEntity):
 
     def __init__(self, room: Room) -> None:
         self._room = room
-        self._attr_unique_id = f"{DOMAIN}_presence_{room.name}"
-        self._attr_suggested_object_id = f"roommate_presence_{room.name}"
+        self._attr_unique_id = f"{DOMAIN}_{room.name}_presence"
         room.presence_entity = self
 
     @property
     def device_info(self) -> DeviceInfo:
         return DeviceInfo(
             identifiers={(DOMAIN, self._room.name)},
-            name=self._room.name.replace("_", " ").title(),
+            name=f"Roommate {self._room.name.replace('_', ' ').title()}",
             manufacturer="Roommate",
             model="Roommate",
         )
