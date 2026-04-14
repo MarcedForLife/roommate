@@ -62,9 +62,7 @@ async def test_user_flow_add_room(hass: HomeAssistant) -> None:
         result["flow_id"], {"lights": ["light.lamp"]}
     )
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], _tuning_defaults()
-    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], _tuning_defaults())
 
     # Returns to the setup menu after adding the room
     assert result["type"] is FlowResultType.MENU
