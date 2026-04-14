@@ -35,7 +35,8 @@ class RoomDiagnosticSensor(SensorEntity):
 
     def __init__(self, room: Room) -> None:
         self._room = room
-        self._attr_unique_id = f"{DOMAIN}_{room.name}_room_state"
+        self._attr_unique_id = f"{DOMAIN}_room_state_{room.name}"
+        self._attr_suggested_object_id = f"roommate_room_state_{room.name}"
         room.diagnostic_entity = self
 
     @property

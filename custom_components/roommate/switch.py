@@ -44,6 +44,7 @@ class GuestModeSwitch(SwitchEntity, RestoreEntity):
     def __init__(self, manager: RoommateManager) -> None:
         self._manager = manager
         self._attr_unique_id = f"{DOMAIN}_guest_mode"
+        self._attr_suggested_object_id = "roommate_guest_mode"
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -75,13 +76,14 @@ class PresenceLightingSwitch(SwitchEntity, RestoreEntity):
     """Toggle for presence-based lighting in a room."""
 
     _attr_has_entity_name = True
-    _attr_name = "Presence Lighting"
+    _attr_name = "Presence Automations"
     _attr_icon = "mdi:motion-sensor"
     _attr_should_poll = False
 
     def __init__(self, room: Room) -> None:
         self._room = room
-        self._attr_unique_id = f"{DOMAIN}_{room.name}_presence_lighting"
+        self._attr_unique_id = f"{DOMAIN}_presence_automations_{room.name}"
+        self._attr_suggested_object_id = f"roommate_presence_automations_{room.name}"
         room.presence_lighting_switch = self
 
     @property
@@ -115,7 +117,8 @@ class BedAutomationsSwitch(SwitchEntity, RestoreEntity):
 
     def __init__(self, room: Room) -> None:
         self._room = room
-        self._attr_unique_id = f"{DOMAIN}_{room.name}_bed_automations"
+        self._attr_unique_id = f"{DOMAIN}_bed_automations_{room.name}"
+        self._attr_suggested_object_id = f"roommate_bed_automations_{room.name}"
         room.bed_automations_switch = self
 
     @property
