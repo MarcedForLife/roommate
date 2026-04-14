@@ -95,7 +95,7 @@ ADAPTIVE_LIGHTING_SCHEMA = vol.Schema(
 def _build_tuning_fields() -> dict:
     """Generate voluptuous fields for room tuning parameters from TUNING_PARAMS."""
     fields: dict = {}
-    for key, (default, low, high, _unit) in TUNING_PARAMS.items():
+    for key, (default, low, high, _unit, _name) in TUNING_PARAMS.items():
         fields[vol.Optional(key, default=default)] = vol.All(
             vol.Coerce(int), vol.Range(min=low, max=high)
         )

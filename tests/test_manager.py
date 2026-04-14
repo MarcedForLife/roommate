@@ -309,6 +309,30 @@ async def test_bed_automations_disabled_skips_bed_change(
         mock.assert_not_called()
 
 
+async def test_presence_lighting_reenabled_on_bed_exit(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """Test that presence lighting is re-enabled when leaving bed, even if lights are off."""
+    room = setup_integration.rooms["bedroom"]
+    hass.states.async_set("binary_sensor.bedroom_presence", STATE_ON)
+    room.handle_presence_change()
+
+    # Manual light off while present disables presence lighting
+    room.handle_light_change(STATE_ON, "off", None)
+    assert not room.presence_lighting_enabled
+
+    # Leave bed with lights off
+    hass.states.async_set("light.lamp_1", "off")
+    hass.states.async_set("light.lamp_2", "off")
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock):
+        await room._on_leaving_bed()
+
+    assert room.presence_lighting_enabled
+    room.cancel_timers()
+
+
 async def test_guest_mode(
     hass: HomeAssistant,
     setup_integration: RoommateManager,

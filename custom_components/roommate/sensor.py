@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from .const import DOMAIN, STATE_EMPTY, STATE_IN_BED, STATE_PRESENT
 from .room import Room
 
 
@@ -45,10 +45,10 @@ class RoomDiagnosticSensor(SensorEntity):
     @property
     def native_value(self) -> str:
         if self._room.is_in_bed:
-            return "in_bed"
+            return STATE_IN_BED
         if self._room.is_present:
-            return "present"
-        return "vacant"
+            return STATE_PRESENT
+        return STATE_EMPTY
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

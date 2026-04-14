@@ -87,6 +87,10 @@ class RoommateManager:
     def sleep_modes(self) -> list[str]:
         return self._config[CONF_SLEEP_MODES]
 
+    def update_config(self, key: str, value: Any) -> None:
+        """Update a global config value in memory."""
+        self._config[key] = value
+
     def _register(self, entity_id: str, room: Room, role: str) -> None:
         self._entity_map.setdefault(entity_id, []).append((room, role))
 

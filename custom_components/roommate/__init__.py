@@ -32,7 +32,13 @@ from .schema import CONFIG_SCHEMA  # noqa: F401 (used by HA)
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.SWITCH, Platform.BUTTON]
+PLATFORMS = [
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.NUMBER,
+    Platform.SENSOR,
+    Platform.SWITCH,
+]
 
 
 def _apply_defaults(config: dict[str, Any]) -> dict[str, Any]:
@@ -48,7 +54,7 @@ def _apply_defaults(config: dict[str, Any]) -> dict[str, Any]:
         bed = room_config.get(CONF_SENSORS, {}).get(CONF_BED)
         if bed:
             bed.setdefault(CONF_PERSONS, [])
-        for key, (default, _low, _high, _unit) in TUNING_PARAMS.items():
+        for key, (default, *_rest) in TUNING_PARAMS.items():
             room_config.setdefault(key, default)
     return config
 
@@ -90,5 +96,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the entry when options change."""
+    """Reload the entry when options change, unless flagged as a tuning-only update."""
+    data = hass.data[DOMAIN][entry.entry_id]
+    if data.pop("skip_reload", False):
+        return
     await hass.config_entries.async_reload(entry.entry_id)
