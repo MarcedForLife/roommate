@@ -13,8 +13,6 @@
 
 A Home Assistant integration that automates room behaviour based on presence and bed occupancy. Define your rooms, sensors, and devices in YAML, and the integration handles the rest.
 
-<br clear="right"/>
-
 ## Features
 
 - **Presence lighting** with configurable transitions
@@ -128,12 +126,12 @@ rooms:
 
 Per room (using "bedroom" as example):
 
-| Entity                                   | Created when                 | Purpose                           |
-| ---------------------------------------- | ---------------------------- | --------------------------------- |
-| `binary_sensor.bedroom_presence`         | Always                       | Combined presence (motion OR bed) |
-| `switch.bedroom_presence_lighting`       | Always                       | Toggle presence-based lighting    |
-| `switch.bedroom_bed_automations`         | Bed sensor configured        | Toggle bed-related automations    |
-| `button.bedroom_restore_auto_brightness` | Adaptive lighting configured | Restore auto-brightness           |
+| Entity                                              | Created when                 | Purpose                           |
+| --------------------------------------------------- | ---------------------------- | --------------------------------- |
+| `binary_sensor.roommate_presence_bedroom`           | Always                       | Combined presence (motion OR bed) |
+| `switch.roommate_presence_automations_bedroom`      | Always                       | Toggle presence-based lighting    |
+| `switch.roommate_bed_automations_bedroom`           | Bed sensor configured        | Toggle bed-related automations    |
+| `button.roommate_restore_auto_brightness_bedroom`   | Adaptive lighting configured | Restore auto-brightness           |
 
 Global:
 

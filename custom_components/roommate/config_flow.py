@@ -401,9 +401,7 @@ class RoommateOptionsFlow(RoomSetupMixin, OptionsFlow):
 def _apply_global_settings(options: dict[str, Any], user_input: dict[str, Any]) -> None:
     """Apply global settings form input to an options dict."""
     new_ids = user_input.get("sleep_lights", [])
-    existing_map = {
-        sl[CONF_ENTITY_ID]: sl for sl in options.get(CONF_SLEEP_LIGHTS, [])
-    }
+    existing_map = {sl[CONF_ENTITY_ID]: sl for sl in options.get(CONF_SLEEP_LIGHTS, [])}
     options[CONF_SLEEP_LIGHTS] = [
         existing_map.get(lid, {CONF_ENTITY_ID: lid, CONF_INHIBIT: []}) for lid in new_ids
     ]
