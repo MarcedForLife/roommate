@@ -51,7 +51,7 @@ DEFAULT_SLEEP_LIGHT_TRANSITION = 5
 RECENTLY_ON_OFF_TRANSITION = 1
 
 # Room state values (used by diagnostic sensor)
-STATE_VACANT = "vacant"
+STATE_EMPTY = "empty"
 STATE_PRESENT = "present"
 STATE_IN_BED = "in_bed"
 
