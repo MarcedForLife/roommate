@@ -466,3 +466,43 @@ async def test_everyone_up_disables_sleep_modes(
 
     assert len(calls) == 1
     assert calls[0].domain == "switch"
+
+
+async def test_state_restored_on_entity_appearance(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """Test that room state is corrected when sensor entities first appear after startup."""
+    room = setup_integration.rooms["bedroom"]
+
+    # Before any sensor states are set, room should be vacant
+    assert not room.is_present
+    assert not room.is_in_bed
+
+    # Simulate sensors appearing after startup (old_state=None).
+    # async_set on a new entity fires STATE_CHANGED with old_state=None.
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    await hass.async_block_till_done()
+
+    assert room.is_in_bed
+    assert room.is_present
+
+
+async def test_state_restored_on_recovery_from_unavailable(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """Test that room state is corrected when a sensor recovers from unavailable."""
+    room = setup_integration.rooms["bedroom"]
+
+    # Sensor starts available, then goes unavailable, then recovers
+    hass.states.async_set("binary_sensor.bedroom_presence", STATE_ON)
+    await hass.async_block_till_done()
+    assert room.is_present
+
+    hass.states.async_set("binary_sensor.bedroom_presence", "unavailable")
+    await hass.async_block_till_done()
+
+    hass.states.async_set("binary_sensor.bedroom_presence", STATE_ON)
+    await hass.async_block_till_done()
+    assert room.is_present
