@@ -35,7 +35,8 @@ class RestoreAutoBrightnessButton(ButtonEntity):
 
     def __init__(self, room: Room) -> None:
         self._room = room
-        self._attr_unique_id = f"{DOMAIN}_{room.name}_restore_auto_brightness"
+        self._attr_unique_id = f"{DOMAIN}_restore_auto_brightness_{room.name}"
+        self._attr_suggested_object_id = f"roommate_restore_auto_brightness_{room.name}"
 
     @property
     def device_info(self) -> DeviceInfo:

@@ -34,7 +34,8 @@ class RoommateSensor(BinarySensorEntity):
 
     def __init__(self, room: Room) -> None:
         self._room = room
-        self._attr_unique_id = f"{DOMAIN}_{room.name}_presence"
+        self._attr_unique_id = f"{DOMAIN}_presence_{room.name}"
+        self._attr_suggested_object_id = f"roommate_presence_{room.name}"
         room.presence_entity = self
 
     @property
