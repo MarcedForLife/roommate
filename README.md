@@ -162,3 +162,11 @@ After installing, you can set up Roommate in two ways:
 
 - **UI**: Go to Settings > Devices & Services > Add Integration, search for "Roommate"
 - **YAML**: Add the configuration to your `configuration.yaml` and restart Home Assistant
+
+## Development
+
+### Translations
+
+UI labels and descriptions live in `translations/`.
+
+Room setup steps and global settings are duplicated under `config` and `options` because HA resolves translations per flow type with no way to share between them. When editing these, update both sections.

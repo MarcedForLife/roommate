@@ -22,12 +22,89 @@ from custom_components.roommate.const import (
 )
 
 
-async def test_user_flow_creates_entry(hass: HomeAssistant) -> None:
-    """Test the initial user config flow creates an entry immediately."""
+async def test_user_flow_shows_menu(hass: HomeAssistant) -> None:
+    """Test the initial user config flow shows a setup menu."""
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    assert result["type"] is FlowResultType.MENU
+    assert "add_room" in result["menu_options"]
+    assert "global_settings" in result["menu_options"]
+    assert "finish_setup" in result["menu_options"]
+
+
+async def test_user_flow_finish_empty(hass: HomeAssistant) -> None:
+    """Test finishing setup without adding rooms creates an empty entry."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "finish_setup"}
+    )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Roommate"
     assert result["options"][CONF_ROOMS] == {}
+
+
+async def test_user_flow_add_room(hass: HomeAssistant) -> None:
+    """Test adding a room during initial setup returns to the menu."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "add_room"}
+    )
+    assert result["step_id"] == "add_room"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Living Room"}
+    )
+    assert result["step_id"] == "room_sensors"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"presence": "binary_sensor.motion"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"lights": ["light.lamp"]}
+    )
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _tuning_defaults()
+    )
+
+    # Returns to the setup menu after adding the room
+    assert result["type"] is FlowResultType.MENU
+
+    # Finish to create the entry
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "finish_setup"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    rooms = result["options"][CONF_ROOMS]
+    assert "living_room" in rooms
+    assert rooms["living_room"]["sensors"]["presence"] == "binary_sensor.motion"
+
+
+async def test_user_flow_global_settings(hass: HomeAssistant) -> None:
+    """Test configuring global settings during initial setup."""
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "global_settings"}
+    )
+    assert result["step_id"] == "global_settings"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "sleep_lights": ["light.hallway"],
+            CONF_ILLUMINANCE_THRESHOLD: 3000,
+            CONF_SLEEP_LIGHT_TRANSITION: 10,
+        },
+    )
+    # Returns to the setup menu
+    assert result["type"] is FlowResultType.MENU
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"next_step_id": "finish_setup"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["options"][CONF_ILLUMINANCE_THRESHOLD] == 3000.0
+    assert result["options"][CONF_SLEEP_LIGHT_TRANSITION] == 10
+    assert result["options"][CONF_SLEEP_LIGHTS][0][CONF_ENTITY_ID] == "light.hallway"
 
 
 async def test_user_flow_single_instance(hass: HomeAssistant) -> None:
