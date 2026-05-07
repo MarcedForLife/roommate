@@ -183,6 +183,12 @@ class RoommateManager:
         if not room.bed_persons or not self.sleep_lights:
             return
 
+        # Skip sleep lights if sleep modes are configured but none are active
+        if self.sleep_modes and not any(
+            _entity_is_on(self.hass, mode) for mode in self.sleep_modes
+        ):
+            return
+
         illuminance_id = self._config.get(CONF_ILLUMINANCE_SENSOR)
         if illuminance_id:
             value = _get_numeric_state(self.hass, illuminance_id)

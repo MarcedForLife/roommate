@@ -121,7 +121,6 @@ class RoomTuningNumber(NumberEntity):
         rooms[self._room.name] = room_config
         options[CONF_ROOMS] = rooms
 
-        self.hass.data[DOMAIN][self._entry.entry_id]["skip_reload"] = True
         self.hass.config_entries.async_update_entry(self._entry, options=options)
         self.async_write_ha_state()
 
@@ -167,7 +166,7 @@ class GlobalSettingNumber(NumberEntity):
 
     @property
     def native_value(self) -> float:
-        return self._entry.options.get(self._key, 0)
+        return self._manager._config.get(self._key, 0)
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the global setting and persist without reloading."""
@@ -177,6 +176,5 @@ class GlobalSettingNumber(NumberEntity):
         options = dict(self._entry.options)
         options[self._key] = coerced
 
-        self.hass.data[DOMAIN][self._entry.entry_id]["skip_reload"] = True
         self.hass.config_entries.async_update_entry(self._entry, options=options)
         self.async_write_ha_state()

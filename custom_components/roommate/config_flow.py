@@ -482,8 +482,8 @@ def _room_selector(rooms: dict) -> SelectSelector:
 def _tuning_schema() -> vol.Schema:
     """Build the tuning parameter schema from the central TUNING_PARAMS table."""
     fields: dict = {}
-    for key, (_default, low, high, unit, _name) in TUNING_PARAMS.items():
-        fields[vol.Required(key)] = NumberSelector(
+    for key, (default, low, high, unit, _name) in TUNING_PARAMS.items():
+        fields[vol.Optional(key, default=default)] = NumberSelector(
             {
                 "min": low,
                 "max": high,

@@ -8,7 +8,9 @@ from unittest.mock import AsyncMock, patch
 from homeassistant.const import STATE_ON
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
+from custom_components.roommate.const import CONF_BED_RETURN_TIMEOUT
 from custom_components.roommate.manager import RoommateManager
 
 
@@ -293,7 +295,11 @@ async def test_snapshot_expires(
         await room._on_leaving_bed()
 
     assert room._pre_exit_snapshot is not None
-    room._clear_snapshot()
+
+    timeout = room.config[CONF_BED_RETURN_TIMEOUT]
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=timeout + 1))
+    await hass.async_block_till_done()
+
     assert room._pre_exit_snapshot is None
 
 
@@ -422,10 +428,28 @@ async def test_waking_respects_guest_mode(
     manager = setup_integration
     room = manager.rooms["bedroom"]
     manager.set_guest_mode(True)
+    hass.states.async_set("switch.sleep_mode_living_room", STATE_ON)
 
     calls: list[ServiceCall] = []
     hass.services.async_register("light", "turn_on", lambda call: calls.append(call))
 
+    await manager.async_on_waking(room)
+    await hass.async_block_till_done()
+
+    assert len(calls) == 0
+
+
+async def test_waking_skipped_when_no_sleep_mode_active(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    manager = setup_integration
+    room = manager.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call))
+
+    # No sleep_mode_living_room set to on, daytime bed sensor toggle shouldn't fire sleep lights
     await manager.async_on_waking(room)
     await hass.async_block_till_done()
 
@@ -444,6 +468,7 @@ async def test_waking_respects_per_light_inhibitors(
 
     # Theatre lighting is on, should inhibit living_room but not toilet
     hass.states.async_set("switch.theatre_lighting", STATE_ON)
+    hass.states.async_set("switch.sleep_mode_living_room", STATE_ON)
 
     await manager.async_on_waking(room)
     await hass.async_block_till_done()
@@ -464,6 +489,7 @@ async def test_waking_all_lights_when_no_inhibitors_active(
 
     # Theatre lighting is off, all lights should activate
     hass.states.async_set("switch.theatre_lighting", "off")
+    hass.states.async_set("switch.sleep_mode_living_room", STATE_ON)
 
     await manager.async_on_waking(room)
     await hass.async_block_till_done()

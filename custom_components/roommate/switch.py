@@ -6,7 +6,7 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_ON
+from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -59,7 +59,8 @@ class GuestModeSwitch(SwitchEntity, RestoreEntity):
         return self._manager.guest_mode
 
     async def async_added_to_hass(self) -> None:
-        if (last_state := await self.async_get_last_state()) is not None:
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in (STATE_ON, STATE_OFF):
             self._manager.set_guest_mode(last_state.state == STATE_ON)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
@@ -93,16 +94,21 @@ class PresenceLightingSwitch(SwitchEntity, RestoreEntity):
         return self._room.presence_lighting_enabled
 
     async def async_added_to_hass(self) -> None:
-        if (last_state := await self.async_get_last_state()) is not None:
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in (STATE_ON, STATE_OFF):
             self._room.set_presence_lighting_enabled(last_state.state == STATE_ON)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         self._room.set_presence_lighting_enabled(True)
         self.async_write_ha_state()
+        if self._room.diagnostic_entity:
+            self._room.diagnostic_entity.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._room.set_presence_lighting_enabled(False)
         self.async_write_ha_state()
+        if self._room.diagnostic_entity:
+            self._room.diagnostic_entity.async_write_ha_state()
 
 
 class BedAutomationsSwitch(SwitchEntity, RestoreEntity):
@@ -127,13 +133,18 @@ class BedAutomationsSwitch(SwitchEntity, RestoreEntity):
         return self._room.bed_automations_enabled
 
     async def async_added_to_hass(self) -> None:
-        if (last_state := await self.async_get_last_state()) is not None:
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in (STATE_ON, STATE_OFF):
             self._room.set_bed_automations_enabled(last_state.state == STATE_ON)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         self._room.set_bed_automations_enabled(True)
         self.async_write_ha_state()
+        if self._room.diagnostic_entity:
+            self._room.diagnostic_entity.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._room.set_bed_automations_enabled(False)
         self.async_write_ha_state()
+        if self._room.diagnostic_entity:
+            self._room.diagnostic_entity.async_write_ha_state()
