@@ -39,8 +39,7 @@
           "fans": "Fans",
           "speakers": "Speakers",
           "al_switch": "Adaptive Lighting switch",
-          "al_sleep_mode": "Adaptive Lighting sleep mode switch",
-          "wake_transition": "Wake transition duration"
+          "al_sleep_mode": "Adaptive Lighting sleep mode switch"
         }
       },
       "room_tuning": {
@@ -54,7 +53,8 @@
           "transition_dim": "Dim transition",
           "bed_exit_delay": "Bed exit delay",
           "bed_return_timeout": "Quick-return timeout",
-          "presence_off_delay": "Presence off delay"
+          "presence_off_delay": "Presence off delay",
+          "wake_transition": "Wake transition"
         },
         "data_description": {
           "dim_brightness": "Brightness level when getting in bed",
@@ -64,7 +64,8 @@
           "transition_dim": "Light transition when dimming for bed",
           "bed_exit_delay": "Debounce delay before processing bed exit",
           "bed_return_timeout": "Window to restore previous room state on quick bed return",
-          "presence_off_delay": "Debounce delay before processing presence off"
+          "presence_off_delay": "Debounce delay before processing presence off",
+          "wake_transition": "Light fade duration when getting out of bed"
         }
       },
       "global_settings": {
@@ -147,8 +148,7 @@
           "fans": "Fans",
           "speakers": "Speakers",
           "al_switch": "Adaptive Lighting switch",
-          "al_sleep_mode": "Adaptive Lighting sleep mode switch",
-          "wake_transition": "Wake transition duration"
+          "al_sleep_mode": "Adaptive Lighting sleep mode switch"
         }
       },
       "room_tuning": {
@@ -162,7 +162,8 @@
           "transition_dim": "Dim transition",
           "bed_exit_delay": "Bed exit delay",
           "bed_return_timeout": "Quick-return timeout",
-          "presence_off_delay": "Presence off delay"
+          "presence_off_delay": "Presence off delay",
+          "wake_transition": "Wake transition"
         },
         "data_description": {
           "dim_brightness": "Brightness level when getting in bed",
@@ -172,7 +173,8 @@
           "transition_dim": "Light transition when dimming for bed",
           "bed_exit_delay": "Debounce delay before processing bed exit",
           "bed_return_timeout": "Window to restore previous room state on quick bed return",
-          "presence_off_delay": "Debounce delay before processing presence off"
+          "presence_off_delay": "Debounce delay before processing presence off",
+          "wake_transition": "Light fade duration when getting out of bed"
         }
       },
       "global_settings": {

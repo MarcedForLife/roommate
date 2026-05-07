@@ -357,7 +357,7 @@ class Room:
         if self.is_lights_on():
             if self.al_switch_id and self.light_entities:
                 coros.append(self.restore_adaptive_lighting())
-        elif self.config.get(CONF_WAKE_TRANSITION) and self._is_present:
+        elif self._is_present:
             coros.append(
                 self._call_service(
                     "light",

@@ -35,12 +35,10 @@ from .const import (
     CONF_SLEEP_MODES,
     CONF_SPEAKERS,
     CONF_SWITCH,
-    CONF_WAKE_TRANSITION,
     DEFAULT_ILLUMINANCE_THRESHOLD,
     DEFAULT_SLEEP_LIGHT_TRANSITION,
     DOMAIN,
     TUNING_PARAMS,
-    WAKE_TRANSITION_RANGE,
 )
 
 
@@ -130,7 +128,7 @@ class RoomSetupMixin:
         )
 
     async def async_step_room_devices(self, user_input: dict[str, Any] | None = None):
-        """Configure fans, speakers, adaptive lighting, and wake transition."""
+        """Configure fans, speakers, and adaptive lighting."""
         if user_input is not None:
             self._room_data[CONF_FANS] = user_input.get("fans", [])
             self._room_data[CONF_SPEAKERS] = user_input.get("speakers", [])
@@ -145,22 +143,14 @@ class RoomSetupMixin:
             else:
                 self._room_data.pop(CONF_ADAPTIVE_LIGHTING, None)
 
-            wake = user_input.get("wake_transition")
-            if wake is not None:
-                self._room_data[CONF_WAKE_TRANSITION] = int(wake)
-            else:
-                self._room_data.pop(CONF_WAKE_TRANSITION, None)
-
             return await self.async_step_room_tuning()
 
         al_existing = self._room_data.get(CONF_ADAPTIVE_LIGHTING, {})
-        wake_low, wake_high, wake_unit = WAKE_TRANSITION_RANGE
         suggested = {
             "fans": self._room_data.get(CONF_FANS) or None,
             "speakers": self._room_data.get(CONF_SPEAKERS) or None,
             "al_switch": al_existing.get(CONF_SWITCH),
             "al_sleep_mode": al_existing.get(CONF_SLEEP_MODE),
-            "wake_transition": self._room_data.get(CONF_WAKE_TRANSITION),
         }
 
         schema = vol.Schema(
@@ -171,15 +161,6 @@ class RoomSetupMixin:
                 ),
                 vol.Optional("al_switch"): EntitySelector({"domain": "switch"}),
                 vol.Optional("al_sleep_mode"): EntitySelector({"domain": "switch"}),
-                vol.Optional("wake_transition"): NumberSelector(
-                    {
-                        "min": wake_low,
-                        "max": wake_high,
-                        "step": 1,
-                        "unit_of_measurement": wake_unit,
-                        "mode": "box",
-                    }
-                ),
             }
         )
 

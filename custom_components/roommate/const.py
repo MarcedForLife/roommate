@@ -66,7 +66,5 @@ TUNING_PARAMS: dict[str, tuple[int, int, int, str, str]] = {
     CONF_BED_EXIT_DELAY: (10, 0, 120, "s", "Bed Exit Delay"),
     CONF_BED_RETURN_TIMEOUT: (180, 0, 600, "s", "Quick-return Timeout"),
     CONF_PRESENCE_OFF_DELAY: (0, 0, 120, "s", "Presence Off Delay"),
+    CONF_WAKE_TRANSITION: (60, 0, 300, "s", "Wake Transition"),
 }
-
-# Wake transition range (optional, no default)
-WAKE_TRANSITION_RANGE = (0, 300, "s")
