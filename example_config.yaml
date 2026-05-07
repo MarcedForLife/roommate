@@ -33,7 +33,7 @@ roommate:
       adaptive_lighting:
         switch: switch.adaptive_lighting_bedroom
         sleep_mode: switch.adaptive_lighting_sleep_mode_bedroom
-      wake_transition: 30
+      wake_transition: 60
       dim_brightness: 5
       recently_on_threshold: 8
       transition_on: 2

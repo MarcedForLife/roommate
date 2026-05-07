@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import deque
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import (
@@ -81,6 +82,7 @@ class Room:
         self._snapshot_timer: CALLBACK_TYPE | None = None
         self._pre_exit_snapshot: dict[str, Any] | None = None
         self._our_context_ids: set[str] = set()
+        self._our_context_order: deque[str] = deque(maxlen=MAX_CONTEXTS)
 
         # Entity references (set during platform setup)
         self.presence_entity: RoommateSensor | None = None
@@ -216,23 +218,21 @@ class Room:
 
     @callback
     def handle_bed_change(self, old: str, new: str) -> None:
-        if not self._bed_automations_enabled:
-            return
-
         if new == STATE_ON and old != STATE_ON:
-            self._cancel_bed_exit_timer()
             self._is_in_bed = True
-            self.hass.async_create_task(self._on_getting_in_bed())
+            if self._bed_automations_enabled:
+                self._cancel_bed_exit_timer()
+                self.hass.async_create_task(self._on_getting_in_bed())
         elif old == STATE_ON and new != STATE_ON:
-            self._start_bed_exit_timer()
+            self._is_in_bed = False
+            if self._bed_automations_enabled:
+                self._start_bed_exit_timer()
 
         if self.diagnostic_entity:
             self.diagnostic_entity.async_write_ha_state()
 
     @callback
     def handle_occupant_change(self, old: str, new: str) -> None:
-        if not self._bed_automations_enabled:
-            return
         try:
             old_count, new_count = int(float(old)), int(float(new))
         except (ValueError, TypeError):
@@ -242,16 +242,20 @@ class Room:
         if not self.bed_sensor_id:
             if new_count > 0 and old_count == 0:
                 self._is_in_bed = True
-                self.hass.async_create_task(self._on_getting_in_bed())
+                if self._bed_automations_enabled:
+                    self.hass.async_create_task(self._on_getting_in_bed())
             elif new_count == 0 and old_count > 0:
-                self.hass.async_create_task(self._on_leaving_bed())
+                self._is_in_bed = False
+                if self._bed_automations_enabled:
+                    self.hass.async_create_task(self._on_leaving_bed())
 
         # Household-level sleep/wake
-        if new_count > old_count:
-            self.hass.async_create_task(self._manager.async_on_sleeping(self))
-        elif new_count < old_count:
-            self.hass.async_create_task(self._manager.async_on_waking(self))
-            self.hass.async_create_task(self._manager.async_on_everyone_up(self))
+        if self._bed_automations_enabled:
+            if new_count > old_count:
+                self.hass.async_create_task(self._manager.async_on_sleeping(self))
+            elif new_count < old_count:
+                self.hass.async_create_task(self._manager.async_on_waking(self))
+                self.hass.async_create_task(self._manager.async_on_everyone_up(self))
 
         if self.diagnostic_entity:
             self.diagnostic_entity.async_write_ha_state()
@@ -336,7 +340,6 @@ class Room:
             )
 
     async def _on_leaving_bed(self) -> None:
-        self._is_in_bed = False
         _LOGGER.debug("Room %s: leaving bed", self.name)
 
         self._save_snapshot()
@@ -354,7 +357,7 @@ class Room:
         if self.is_lights_on():
             if self.al_switch_id and self.light_entities:
                 coros.append(self.restore_adaptive_lighting())
-        elif self.config.get(CONF_WAKE_TRANSITION) and self._is_present:
+        elif self._is_present:
             coros.append(
                 self._call_service(
                     "light",
@@ -387,14 +390,12 @@ class Room:
         if not self.hass.services.has_service("adaptive_lighting", "set_manual_control"):
             return
 
-        await self.hass.services.async_call(
+        await self._call_service(
             "adaptive_lighting",
             "set_manual_control",
-            service_data={
-                "entity_id": al_switch,
-                "manual_control": False,
-                "lights": lights,
-            },
+            entity_id=al_switch,
+            manual_control=False,
+            lights=lights,
         )
 
     def _save_snapshot(self) -> None:
@@ -463,6 +464,12 @@ class Room:
         if snapshot.get("sleep_mode") == STATE_ON and self.sleep_mode_id:
             coros.append(self._call_service("switch", "turn_on", entity_id=self.sleep_mode_id))
 
+        any_light_on = any(
+            attrs["state"] == STATE_ON for attrs in snapshot.get("lights", {}).values()
+        )
+        if any_light_on and self.al_switch_id:
+            coros.append(self.restore_adaptive_lighting())
+
         if coros:
             await asyncio.gather(*coros, return_exceptions=True)
 
@@ -470,6 +477,8 @@ class Room:
     def _on_snapshot_expired(self, _now: Any) -> None:
         self._snapshot_timer = None
         self._pre_exit_snapshot = None
+        if self.diagnostic_entity:
+            self.diagnostic_entity.async_write_ha_state()
         _LOGGER.debug("Room %s: state snapshot expired", self.name)
 
     def _cancel_snapshot_timer(self) -> None:
@@ -533,10 +542,11 @@ class Room:
         **kwargs: Any,
     ) -> None:
         context = Context()
+        if len(self._our_context_order) == self._our_context_order.maxlen:
+            evicted = self._our_context_order.popleft()
+            self._our_context_ids.discard(evicted)
+        self._our_context_order.append(context.id)
         self._our_context_ids.add(context.id)
-        if len(self._our_context_ids) > MAX_CONTEXTS:
-            self._our_context_ids.clear()
-            self._our_context_ids.add(context.id)
 
         try:
             await self.hass.services.async_call(

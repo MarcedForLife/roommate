@@ -104,7 +104,7 @@ roommate:
       transition_on: 2               # seconds
       transition_off: 5              # seconds
       transition_dim: 5              # seconds
-      wake_transition: 30            # seconds, fade lights on when leaving bed
+      wake_transition: 60            # seconds, fade lights on when leaving bed
       bed_exit_delay: 10             # seconds, debounce before triggering bed exit
       bed_return_timeout: 180        # seconds, restore room state on quick return
       presence_off_delay: 0          # seconds, debounce before lights off
