@@ -70,12 +70,27 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+def _strip_tuning(options: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of options with all tuning fields removed for structural comparison."""
+    stripped = copy.deepcopy(dict(options))
+    for global_key in (CONF_ILLUMINANCE_THRESHOLD, CONF_SLEEP_LIGHT_TRANSITION):
+        stripped.pop(global_key, None)
+    rooms = stripped.get(CONF_ROOMS, {})
+    for room_config in rooms.values():
+        for tuning_key in TUNING_PARAMS:
+            room_config.pop(tuning_key, None)
+    return stripped
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Roommate from a config entry."""
     config = _apply_defaults(copy.deepcopy(dict(entry.options)))
 
     manager = RoommateManager(hass, config)
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {"manager": manager}
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
+        "manager": manager,
+        "structural_snapshot": _strip_tuning(entry.options),
+    }
 
     await manager.async_setup()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -90,14 +105,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Roommate config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        data = hass.data[DOMAIN].pop(entry.entry_id)
-        data["manager"].shutdown()
+        hass.data[DOMAIN][entry.entry_id]["manager"].shutdown()
+        hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload the entry when options change, unless flagged as a tuning-only update."""
+    """Reload only when structural options changed; tuning-only edits apply in place."""
     data = hass.data[DOMAIN][entry.entry_id]
-    if data.pop("skip_reload", False):
+    new_structural = _strip_tuning(entry.options)
+    if new_structural == data["structural_snapshot"]:
+        manager: RoommateManager = data["manager"]
+        new_options = entry.options
+        for global_key in (CONF_ILLUMINANCE_THRESHOLD, CONF_SLEEP_LIGHT_TRANSITION):
+            if global_key in new_options:
+                manager.update_config(global_key, new_options[global_key])
+        for room_name, room_config in new_options.get(CONF_ROOMS, {}).items():
+            room = manager.rooms.get(room_name)
+            if room is None:
+                continue
+            for tuning_key in TUNING_PARAMS:
+                if tuning_key in room_config:
+                    room.config[tuning_key] = room_config[tuning_key]
         return
+    data["structural_snapshot"] = new_structural
     await hass.config_entries.async_reload(entry.entry_id)

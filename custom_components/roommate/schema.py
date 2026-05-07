@@ -28,12 +28,10 @@ from .const import (
     CONF_SPEAKERS,
     CONF_SWITCH,
     CONF_TEMPERATURE,
-    CONF_WAKE_TRANSITION,
     DEFAULT_ILLUMINANCE_THRESHOLD,
     DEFAULT_SLEEP_LIGHT_TRANSITION,
     DOMAIN,
     TUNING_PARAMS,
-    WAKE_TRANSITION_RANGE,
 )
 
 
@@ -109,10 +107,6 @@ ROOM_SCHEMA = vol.Schema(
         vol.Optional(CONF_FANS, default=[]): vol.All(cv.ensure_list, [cv.entity_id]),
         vol.Optional(CONF_SPEAKERS, default=[]): vol.All(cv.ensure_list, [cv.entity_id]),
         vol.Optional(CONF_ADAPTIVE_LIGHTING): ADAPTIVE_LIGHTING_SCHEMA,
-        vol.Optional(CONF_WAKE_TRANSITION): vol.All(
-            vol.Coerce(int),
-            vol.Range(min=WAKE_TRANSITION_RANGE[0], max=WAKE_TRANSITION_RANGE[1]),
-        ),
         **_build_tuning_fields(),
     }
 )

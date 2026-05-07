@@ -14,7 +14,10 @@ async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a Roommate config entry."""
-    manager = hass.data[DOMAIN][entry.entry_id]["manager"]
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if entry_data is None or "manager" not in entry_data:
+        return {"error": "integration not initialized"}
+    manager = entry_data["manager"]
 
     rooms: dict[str, Any] = {}
     for name, room in manager.rooms.items():

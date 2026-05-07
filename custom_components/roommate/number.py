@@ -19,6 +19,7 @@ from .const import (
     CONF_ROOMS,
     CONF_SLEEP_LIGHT_TRANSITION,
     CONF_TRANSITION_DIM,
+    CONF_WAKE_TRANSITION,
     DOMAIN,
     TUNING_PARAMS,
 )
@@ -32,6 +33,7 @@ BED_TUNING_KEYS = {
     CONF_TRANSITION_DIM,
     CONF_BED_EXIT_DELAY,
     CONF_BED_RETURN_TIMEOUT,
+    CONF_WAKE_TRANSITION,
 }
 
 
@@ -121,7 +123,6 @@ class RoomTuningNumber(NumberEntity):
         rooms[self._room.name] = room_config
         options[CONF_ROOMS] = rooms
 
-        self.hass.data[DOMAIN][self._entry.entry_id]["skip_reload"] = True
         self.hass.config_entries.async_update_entry(self._entry, options=options)
         self.async_write_ha_state()
 
@@ -167,7 +168,7 @@ class GlobalSettingNumber(NumberEntity):
 
     @property
     def native_value(self) -> float:
-        return self._entry.options.get(self._key, 0)
+        return self._manager._config.get(self._key, 0)
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the global setting and persist without reloading."""
@@ -177,6 +178,5 @@ class GlobalSettingNumber(NumberEntity):
         options = dict(self._entry.options)
         options[self._key] = coerced
 
-        self.hass.data[DOMAIN][self._entry.entry_id]["skip_reload"] = True
         self.hass.config_entries.async_update_entry(self._entry, options=options)
         self.async_write_ha_state()
