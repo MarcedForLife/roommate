@@ -81,7 +81,7 @@ class RoomSetupMixin:
                     sensors[CONF_BED] = bed
 
                 self._room_data[CONF_SENSORS] = sensors
-                return await self.async_step_room_lights()
+                return await self.async_step_room_devices()
 
         existing = self._room_data.get(CONF_SENSORS, {})
         existing_bed = existing.get(CONF_BED, {})
@@ -108,28 +108,10 @@ class RoomSetupMixin:
             description_placeholders=self._placeholders(),
         )
 
-    async def async_step_room_lights(self, user_input: dict[str, Any] | None = None):
-        """Configure room lights."""
+    async def async_step_room_devices(self, user_input: dict[str, Any] | None = None):
+        """Configure lights, fans, speakers, and adaptive lighting."""
         if user_input is not None:
             self._room_data[CONF_LIGHTS] = user_input["lights"]
-            return await self.async_step_room_devices()
-
-        suggested = {"lights": self._room_data.get(CONF_LIGHTS)}
-        schema = vol.Schema(
-            {
-                vol.Required("lights"): EntitySelector({"domain": "light", "multiple": True}),
-            }
-        )
-
-        return self.async_show_form(
-            step_id="room_lights",
-            data_schema=self.add_suggested_values_to_schema(schema, suggested),
-            description_placeholders=self._placeholders(),
-        )
-
-    async def async_step_room_devices(self, user_input: dict[str, Any] | None = None):
-        """Configure fans, speakers, and adaptive lighting."""
-        if user_input is not None:
             self._room_data[CONF_FANS] = user_input.get("fans", [])
             self._room_data[CONF_SPEAKERS] = user_input.get("speakers", [])
 
@@ -147,6 +129,7 @@ class RoomSetupMixin:
 
         al_existing = self._room_data.get(CONF_ADAPTIVE_LIGHTING, {})
         suggested = {
+            "lights": self._room_data.get(CONF_LIGHTS),
             "fans": self._room_data.get(CONF_FANS) or None,
             "speakers": self._room_data.get(CONF_SPEAKERS) or None,
             "al_switch": al_existing.get(CONF_SWITCH),
@@ -155,6 +138,7 @@ class RoomSetupMixin:
 
         schema = vol.Schema(
             {
+                vol.Required("lights"): EntitySelector({"domain": "light", "multiple": True}),
                 vol.Optional("fans"): EntitySelector({"domain": "fan", "multiple": True}),
                 vol.Optional("speakers"): EntitySelector(
                     {"domain": "media_player", "multiple": True}

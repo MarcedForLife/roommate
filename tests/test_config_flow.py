@@ -61,7 +61,6 @@ async def test_user_flow_add_room(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"lights": ["light.lamp"]}
     )
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     result = await hass.config_entries.flow.async_configure(result["flow_id"], _tuning_defaults())
 
     # Returns to the setup menu after adding the room
@@ -193,17 +192,12 @@ async def test_options_add_room(hass: HomeAssistant) -> None:
         result["flow_id"],
         {"presence": "binary_sensor.bedroom_motion"},
     )
-    assert result["step_id"] == "room_lights"
-
-    # Lights
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {"lights": ["light.bedroom"]},
-    )
     assert result["step_id"] == "room_devices"
 
-    # Devices (skip all optional)
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    # Devices (lights required, everything else optional)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"lights": ["light.bedroom"]}
+    )
     assert result["step_id"] == "room_tuning"
 
     # Tuning (use defaults)
@@ -242,12 +236,11 @@ async def test_options_add_room_with_bed(hass: HomeAssistant) -> None:
             "bed_persons": ["person.alice"],
         },
     )
-    assert result["step_id"] == "room_lights"
+    assert result["step_id"] == "room_devices"
 
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"lights": ["light.lamp"]}
     )
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], _tuning_defaults()
     )
@@ -336,7 +329,6 @@ async def test_options_edit_room(hass: HomeAssistant) -> None:
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"lights": ["light.new_lamp"]}
     )
-    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], _tuning_defaults()
     )
