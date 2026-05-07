@@ -83,3 +83,4 @@ async def setup_integration(hass: HomeAssistant, full_config: dict):
     await manager.async_setup()
     yield manager
     manager.shutdown()
+    await hass.async_block_till_done()
