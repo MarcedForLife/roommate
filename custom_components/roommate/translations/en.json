@@ -25,17 +25,11 @@
           "bed_persons": "Bed persons"
         }
       },
-      "room_lights": {
-        "title": "Lights",
-        "description": "Select lights for {room_name}.",
-        "data": {
-          "lights": "Lights"
-        }
-      },
       "room_devices": {
         "title": "Devices & Features",
-        "description": "Configure additional devices and features for {room_name}. All fields are optional.",
+        "description": "Configure devices for {room_name}. Lights are required; everything else is optional.",
         "data": {
+          "lights": "Lights",
           "fans": "Fans",
           "speakers": "Speakers",
           "al_switch": "Adaptive Lighting switch",
@@ -134,17 +128,11 @@
           "bed_persons": "Bed persons"
         }
       },
-      "room_lights": {
-        "title": "Lights",
-        "description": "Select lights for {room_name}.",
-        "data": {
-          "lights": "Lights"
-        }
-      },
       "room_devices": {
         "title": "Devices & Features",
-        "description": "Configure additional devices and features for {room_name}. All fields are optional.",
+        "description": "Configure devices for {room_name}. Lights are required; everything else is optional.",
         "data": {
+          "lights": "Lights",
           "fans": "Fans",
           "speakers": "Speakers",
           "al_switch": "Adaptive Lighting switch",
