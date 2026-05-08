@@ -369,8 +369,17 @@ class Room:
 
         for fan in self.config[CONF_FANS]:
             coros.append(self._call_service("fan", "turn_off", entity_id=fan))
+
+        snapshot_active = self._pre_exit_snapshot is not None
         for speaker in self.config[CONF_SPEAKERS]:
-            coros.append(self._call_service("media_player", "media_stop", entity_id=speaker))
+            if snapshot_active:
+                # Pause playing speakers so we can resume on quick return
+                if _entity_is_on(self.hass, speaker, target_state="playing"):
+                    coros.append(
+                        self._call_service("media_player", "media_pause", entity_id=speaker)
+                    )
+            else:
+                coros.append(self._call_service("media_player", "media_stop", entity_id=speaker))
 
         if coros:
             await asyncio.gather(*coros, return_exceptions=True)
@@ -404,7 +413,7 @@ class Room:
         if timeout <= 0:
             return
 
-        snapshot: dict[str, Any] = {"lights": {}, "fans": {}}
+        snapshot: dict[str, Any] = {"lights": {}, "fans": {}, "speakers": {}}
 
         for light_id in self.light_entities:
             state = self.hass.states.get(light_id)
@@ -422,6 +431,11 @@ class Room:
                     "state": state.state,
                     "percentage": state.attributes.get("percentage"),
                 }
+
+        for speaker_id in self.config[CONF_SPEAKERS]:
+            state = self.hass.states.get(speaker_id)
+            if state:
+                snapshot["speakers"][speaker_id] = {"state": state.state}
 
         if self.sleep_mode_id:
             state = self.hass.states.get(self.sleep_mode_id)
@@ -461,6 +475,10 @@ class Room:
                     data["percentage"] = attrs["percentage"]
                 coros.append(self._call_service("fan", "turn_on", entity_id=fan_id, **data))
 
+        for speaker_id, attrs in snapshot.get("speakers", {}).items():
+            if attrs["state"] == "playing":
+                coros.append(self._call_service("media_player", "media_play", entity_id=speaker_id))
+
         if snapshot.get("sleep_mode") == STATE_ON and self.sleep_mode_id:
             coros.append(self._call_service("switch", "turn_on", entity_id=self.sleep_mode_id))
 
@@ -476,10 +494,27 @@ class Room:
     @callback
     def _on_snapshot_expired(self, _now: Any) -> None:
         self._snapshot_timer = None
+        snapshot = self._pre_exit_snapshot
         self._pre_exit_snapshot = None
+
+        speakers_to_stop = [
+            speaker_id
+            for speaker_id, attrs in (snapshot or {}).get("speakers", {}).items()
+            if attrs["state"] == "playing"
+        ]
+        if speakers_to_stop:
+            self.hass.async_create_task(self._stop_speakers(speakers_to_stop))
+
         if self.diagnostic_entity:
             self.diagnostic_entity.async_write_ha_state()
         _LOGGER.debug("Room %s: state snapshot expired", self.name)
+
+    async def _stop_speakers(self, speaker_ids: list[str]) -> None:
+        coros = [
+            self._call_service("media_player", "media_stop", entity_id=speaker_id)
+            for speaker_id in speaker_ids
+        ]
+        await asyncio.gather(*coros, return_exceptions=True)
 
     def _cancel_snapshot_timer(self) -> None:
         if self._snapshot_timer:
