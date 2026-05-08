@@ -85,12 +85,6 @@ class RoomSetupMixin:
                 if illuminance_sensor:
                     sensors[CONF_ILLUMINANCE] = illuminance_sensor
 
-                threshold = user_input.get("illuminance_threshold")
-                if threshold is not None:
-                    self._room_data[CONF_ILLUMINANCE_THRESHOLD] = float(threshold)
-                else:
-                    self._room_data.pop(CONF_ILLUMINANCE_THRESHOLD, None)
-
                 self._room_data[CONF_SENSORS] = sensors
                 return await self.async_step_room_devices()
 
@@ -100,9 +94,8 @@ class RoomSetupMixin:
             "presence": existing.get(CONF_PRESENCE),
             "bed_presence": existing_bed.get(CONF_PRESENCE),
             "bed_occupants": existing_bed.get(CONF_OCCUPANTS),
-            "bed_persons": existing_bed.get(CONF_PERSONS),
             "illuminance": existing.get(CONF_ILLUMINANCE),
-            "illuminance_threshold": self._room_data.get(CONF_ILLUMINANCE_THRESHOLD),
+            "bed_persons": existing_bed.get(CONF_PERSONS),
         }
 
         schema = vol.Schema(
@@ -110,17 +103,8 @@ class RoomSetupMixin:
                 vol.Required("presence"): EntitySelector({"domain": "binary_sensor"}),
                 vol.Optional("bed_presence"): EntitySelector({"domain": "binary_sensor"}),
                 vol.Optional("bed_occupants"): EntitySelector({"domain": "sensor"}),
-                vol.Optional("bed_persons"): EntitySelector({"domain": "person", "multiple": True}),
                 vol.Optional("illuminance"): EntitySelector({"domain": "sensor"}),
-                vol.Optional("illuminance_threshold"): NumberSelector(
-                    {
-                        "min": 0,
-                        "max": 100000,
-                        "step": 100,
-                        "unit_of_measurement": "lx",
-                        "mode": "box",
-                    }
-                ),
+                vol.Optional("bed_persons"): EntitySelector({"domain": "person", "multiple": True}),
             }
         )
 

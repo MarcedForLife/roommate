@@ -169,9 +169,9 @@ class Room:
 
     @property
     def illuminance_threshold(self) -> float:
-        """Effective illuminance threshold: room override falls back to global."""
-        room_threshold = self.config.get(CONF_ILLUMINANCE_THRESHOLD)
-        if room_threshold is not None:
+        """Effective illuminance threshold: room override (0 = use global)."""
+        room_threshold = self.config.get(CONF_ILLUMINANCE_THRESHOLD, 0)
+        if room_threshold > 0:
             return room_threshold
         return self._manager.illuminance_threshold
 
