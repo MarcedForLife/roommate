@@ -16,6 +16,7 @@ roommate:
     bedroom:
       sensors:
         presence: binary_sensor.bedroom_presence_sensor_presence
+        illuminance: sensor.bedroom_lux       # Optional, overrides global
         bed:
           presence: binary_sensor.bed_presence_sensor_occupancy
           occupants: sensor.bed_presence_sensor_occupants
@@ -40,6 +41,7 @@ roommate:
       transition_off: 5
       bed_exit_delay: 10
       bed_return_timeout: 180
+      illuminance_threshold: 200              # Optional, overrides global
 
     # Example: a guest bedroom with only a motion sensor and lights
     # guest_bedroom:
