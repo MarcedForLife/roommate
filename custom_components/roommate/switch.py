@@ -29,6 +29,8 @@ async def async_setup_entry(
         entities.append(PresenceLightingSwitch(room))
         if room.has_bed_sensor:
             entities.append(BedAutomationsSwitch(room))
+        if room.illuminance_sensor_id:
+            entities.append(IlluminanceGateSwitch(room))
 
     async_add_entities(entities)
 
@@ -145,6 +147,45 @@ class BedAutomationsSwitch(SwitchEntity, RestoreEntity):
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         self._room.set_bed_automations_enabled(False)
+        self.async_write_ha_state()
+        if self._room.diagnostic_entity:
+            self._room.diagnostic_entity.async_write_ha_state()
+
+
+class IlluminanceGateSwitch(SwitchEntity, RestoreEntity):
+    """Toggle to gate room lighting by ambient illuminance. Off = always turn on."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Illuminance Gating"
+    _attr_icon = "mdi:brightness-6"
+    _attr_should_poll = False
+
+    def __init__(self, room: Room) -> None:
+        self._room = room
+        self._attr_unique_id = f"{DOMAIN}_{room.name}_illuminance_gating"
+        room.illuminance_gate_switch = self
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        return DeviceInfo(identifiers={(DOMAIN, self._room.name)})
+
+    @property
+    def is_on(self) -> bool:
+        return self._room.illuminance_gate_enabled
+
+    async def async_added_to_hass(self) -> None:
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in (STATE_ON, STATE_OFF):
+            self._room.set_illuminance_gate_enabled(last_state.state == STATE_ON)
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self._room.set_illuminance_gate_enabled(True)
+        self.async_write_ha_state()
+        if self._room.diagnostic_entity:
+            self._room.diagnostic_entity.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self._room.set_illuminance_gate_enabled(False)
         self.async_write_ha_state()
         if self._room.diagnostic_entity:
             self._room.diagnostic_entity.async_write_ha_state()

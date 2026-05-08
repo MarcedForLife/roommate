@@ -87,6 +87,14 @@ class RoommateManager:
     def sleep_modes(self) -> list[str]:
         return self._config[CONF_SLEEP_MODES]
 
+    @property
+    def illuminance_sensor_id(self) -> str | None:
+        return self._config.get(CONF_ILLUMINANCE_SENSOR)
+
+    @property
+    def illuminance_threshold(self) -> float:
+        return self._config[CONF_ILLUMINANCE_THRESHOLD]
+
     def update_config(self, key: str, value: Any) -> None:
         """Update a global config value in memory."""
         self._config[key] = value
