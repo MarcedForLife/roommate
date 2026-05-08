@@ -22,13 +22,11 @@
           "presence": "Presence sensor",
           "bed_presence": "Bed presence sensor",
           "bed_occupants": "Bed occupants sensor",
-          "bed_persons": "Bed persons",
           "illuminance": "Illuminance sensor",
-          "illuminance_threshold": "Illuminance threshold"
+          "bed_persons": "Bed persons"
         },
         "data_description": {
-          "illuminance": "Per-room override; if unset, the global illuminance sensor is used",
-          "illuminance_threshold": "Per-room override in lux; if unset, the global threshold is used. Lights skip turning on when above this."
+          "illuminance": "Per-room override; if unset, the global illuminance sensor is used"
         }
       },
       "room_devices": {
@@ -54,7 +52,8 @@
           "bed_exit_delay": "Bed exit delay",
           "bed_return_timeout": "Quick-return timeout",
           "presence_off_delay": "Presence off delay",
-          "wake_transition": "Wake transition"
+          "wake_transition": "Wake transition",
+          "illuminance_threshold": "Illuminance threshold"
         },
         "data_description": {
           "dim_brightness": "Brightness level when getting in bed",
@@ -65,7 +64,8 @@
           "bed_exit_delay": "Debounce delay before processing bed exit",
           "bed_return_timeout": "Window to restore previous room state on quick bed return",
           "presence_off_delay": "Debounce delay before processing presence off",
-          "wake_transition": "Light fade duration when getting out of bed"
+          "wake_transition": "Light fade duration when getting out of bed",
+          "illuminance_threshold": "Lux level above which presence and wake lights are skipped. 0 = use global threshold."
         }
       },
       "global_settings": {
@@ -131,13 +131,11 @@
           "presence": "Presence sensor",
           "bed_presence": "Bed presence sensor",
           "bed_occupants": "Bed occupants sensor",
-          "bed_persons": "Bed persons",
           "illuminance": "Illuminance sensor",
-          "illuminance_threshold": "Illuminance threshold"
+          "bed_persons": "Bed persons"
         },
         "data_description": {
-          "illuminance": "Per-room override; if unset, the global illuminance sensor is used",
-          "illuminance_threshold": "Per-room override in lux; if unset, the global threshold is used. Lights skip turning on when above this."
+          "illuminance": "Per-room override; if unset, the global illuminance sensor is used"
         }
       },
       "room_devices": {
@@ -163,7 +161,8 @@
           "bed_exit_delay": "Bed exit delay",
           "bed_return_timeout": "Quick-return timeout",
           "presence_off_delay": "Presence off delay",
-          "wake_transition": "Wake transition"
+          "wake_transition": "Wake transition",
+          "illuminance_threshold": "Illuminance threshold"
         },
         "data_description": {
           "dim_brightness": "Brightness level when getting in bed",
@@ -174,7 +173,8 @@
           "bed_exit_delay": "Debounce delay before processing bed exit",
           "bed_return_timeout": "Window to restore previous room state on quick bed return",
           "presence_off_delay": "Debounce delay before processing presence off",
-          "wake_transition": "Light fade duration when getting out of bed"
+          "wake_transition": "Light fade duration when getting out of bed",
+          "illuminance_threshold": "Lux level above which presence and wake lights are skipped. 0 = use global threshold."
         }
       },
       "global_settings": {

@@ -107,7 +107,6 @@ ROOM_SCHEMA = vol.Schema(
         vol.Optional(CONF_FANS, default=[]): vol.All(cv.ensure_list, [cv.entity_id]),
         vol.Optional(CONF_SPEAKERS, default=[]): vol.All(cv.ensure_list, [cv.entity_id]),
         vol.Optional(CONF_ADAPTIVE_LIGHTING): ADAPTIVE_LIGHTING_SCHEMA,
-        vol.Optional(CONF_ILLUMINANCE_THRESHOLD): vol.All(vol.Coerce(float), vol.Range(min=0)),
         **_build_tuning_fields(),
     }
 )
