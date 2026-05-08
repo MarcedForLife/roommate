@@ -241,13 +241,50 @@ async def test_on_leaving_bed_turns_off_fans(
     room.cancel_timers()
 
 
-async def test_on_leaving_bed_stops_speakers(
+async def test_on_leaving_bed_pauses_playing_speakers(
     hass: HomeAssistant,
     setup_integration: RoommateManager,
 ) -> None:
     room = setup_integration.rooms["bedroom"]
     hass.states.async_set("light.lamp_1", "off")
     hass.states.async_set("light.lamp_2", "off")
+    hass.states.async_set("media_player.bedroom_speaker", "playing")
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_leaving_bed()
+        speaker_calls = [c for c in mock.call_args_list if c.args[0] == "media_player"]
+        assert len(speaker_calls) == 1
+        assert speaker_calls[0].args[1] == "media_pause"
+
+    room.cancel_timers()
+
+
+async def test_on_leaving_bed_skips_non_playing_speakers(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    room = setup_integration.rooms["bedroom"]
+    hass.states.async_set("light.lamp_1", "off")
+    hass.states.async_set("light.lamp_2", "off")
+    hass.states.async_set("media_player.bedroom_speaker", "idle")
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_leaving_bed()
+        speaker_calls = [c for c in mock.call_args_list if c.args[0] == "media_player"]
+        assert len(speaker_calls) == 0
+
+    room.cancel_timers()
+
+
+async def test_on_leaving_bed_stops_speakers_when_snapshot_disabled(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    room = setup_integration.rooms["bedroom"]
+    room.config[CONF_BED_RETURN_TIMEOUT] = 0
+    hass.states.async_set("light.lamp_1", "off")
+    hass.states.async_set("light.lamp_2", "off")
+    hass.states.async_set("media_player.bedroom_speaker", "playing")
 
     with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
         await room._on_leaving_bed()
@@ -255,7 +292,47 @@ async def test_on_leaving_bed_stops_speakers(
         assert len(speaker_calls) == 1
         assert speaker_calls[0].args[1] == "media_stop"
 
-    room.cancel_timers()
+
+async def test_paused_speaker_resumes_on_quick_return(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    room = setup_integration.rooms["bedroom"]
+    hass.states.async_set("light.lamp_1", "off")
+    hass.states.async_set("light.lamp_2", "off")
+    hass.states.async_set("media_player.bedroom_speaker", "playing")
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock):
+        await room._on_leaving_bed()
+
+    assert room._pre_exit_snapshot["speakers"]["media_player.bedroom_speaker"]["state"] == "playing"
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_getting_in_bed()
+        speaker_calls = [c for c in mock.call_args_list if c.args[0] == "media_player"]
+        assert len(speaker_calls) == 1
+        assert speaker_calls[0].args[1] == "media_play"
+
+
+async def test_paused_speaker_stops_on_snapshot_expiry(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    room = setup_integration.rooms["bedroom"]
+    hass.states.async_set("light.lamp_1", "off")
+    hass.states.async_set("light.lamp_2", "off")
+    hass.states.async_set("media_player.bedroom_speaker", "playing")
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock):
+        await room._on_leaving_bed()
+
+    timeout = room.config[CONF_BED_RETURN_TIMEOUT]
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=timeout + 1))
+        await hass.async_block_till_done()
+        speaker_calls = [c for c in mock.call_args_list if c.args[0] == "media_player"]
+        assert len(speaker_calls) == 1
+        assert speaker_calls[0].args[1] == "media_stop"
 
 
 async def test_snapshot_restore_on_quick_return(
