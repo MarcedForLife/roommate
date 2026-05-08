@@ -41,7 +41,7 @@ roommate:
       transition_off: 5
       bed_exit_delay: 10
       bed_return_timeout: 180
-      illuminance_threshold: 200              # Optional, overrides global
+      illuminance_threshold: 200              # Lux override; 0 means use global
 
     # Example: a guest bedroom with only a motion sensor and lights
     # guest_bedroom:
