@@ -136,15 +136,17 @@ Per room (using "bedroom" as example):
 | `switch.roommate_bedroom_bed_automations`         | Bed sensor configured                 | Toggle bed-related automations          |
 | `switch.roommate_bedroom_illuminance_gating`      | Illuminance sensor available          | Off bypasses the lux threshold          |
 | `button.roommate_bedroom_restore_auto_brightness` | Adaptive lighting configured          | Restore auto-brightness                 |
-| `number.roommate_bedroom_*`                       | Per tuning param                      | Adjust timing and brightness values     |
+| `number.roommate_bedroom_*`                       | Per tuning param (conditional)        | Adjust timing and brightness values     |
+
+Bed-related tuning entities only appear when a bed sensor is configured. The per-room `illuminance_threshold` number only appears when an illuminance sensor is available, and `0` means "use the global threshold".
 
 Global:
 
-| Entity                                   | Created when                  | Purpose                         |
-| ---------------------------------------- | ----------------------------- | ------------------------------- |
-| `switch.roommate_guest_mode`             | Always                        | Suppress sleep light activation |
-| `number.roommate_sleep_light_transition` | Sleep lights configured       | Sleep light fade duration       |
-| `number.roommate_illuminance_threshold`  | Illuminance sensor configured | Lux threshold for sleep lights  |
+| Entity                                   | Created when                  | Purpose                                          |
+| ---------------------------------------- | ----------------------------- | ------------------------------------------------ |
+| `switch.roommate_guest_mode`             | Always                        | Suppress sleep light activation                  |
+| `number.roommate_sleep_light_transition` | Sleep lights configured       | Sleep light fade duration                        |
+| `number.roommate_illuminance_threshold`  | Illuminance sensor configured | Lux threshold for sleep lights (per-room can override room actions) |
 
 All entities are grouped under per-room "Roommate {Room}" devices or the global "Roommate" hub device.
 
