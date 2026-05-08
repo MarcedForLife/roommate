@@ -28,6 +28,8 @@ from .const import (
     CONF_BED_RETURN_TIMEOUT,
     CONF_DIM_BRIGHTNESS,
     CONF_FANS,
+    CONF_ILLUMINANCE,
+    CONF_ILLUMINANCE_THRESHOLD,
     CONF_LIGHTS,
     CONF_OCCUPANTS,
     CONF_PERSONS,
@@ -49,7 +51,7 @@ if TYPE_CHECKING:
     from .binary_sensor import RoommateSensor
     from .manager import RoommateManager
     from .sensor import RoomDiagnosticSensor
-    from .switch import BedAutomationsSwitch, PresenceLightingSwitch
+    from .switch import BedAutomationsSwitch, IlluminanceGateSwitch, PresenceLightingSwitch
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,6 +78,7 @@ class Room:
         self._is_in_bed = False
         self._presence_lighting_enabled = True
         self._bed_automations_enabled = True
+        self._illuminance_gate_enabled = True
 
         self._bed_exit_timer: CALLBACK_TYPE | None = None
         self._presence_off_timer: CALLBACK_TYPE | None = None
@@ -88,6 +91,7 @@ class Room:
         self.presence_entity: RoommateSensor | None = None
         self.presence_lighting_switch: PresenceLightingSwitch | None = None
         self.bed_automations_switch: BedAutomationsSwitch | None = None
+        self.illuminance_gate_switch: IlluminanceGateSwitch | None = None
         self.diagnostic_entity: RoomDiagnosticSensor | None = None
 
     @property
@@ -152,6 +156,26 @@ class Room:
         return self._bed_automations_enabled
 
     @property
+    def illuminance_gate_enabled(self) -> bool:
+        return self._illuminance_gate_enabled
+
+    @property
+    def illuminance_sensor_id(self) -> str | None:
+        """Effective illuminance sensor: room override falls back to global."""
+        room_sensor = self.config[CONF_SENSORS].get(CONF_ILLUMINANCE)
+        if room_sensor:
+            return room_sensor
+        return self._manager.illuminance_sensor_id
+
+    @property
+    def illuminance_threshold(self) -> float:
+        """Effective illuminance threshold: room override falls back to global."""
+        room_threshold = self.config.get(CONF_ILLUMINANCE_THRESHOLD)
+        if room_threshold is not None:
+            return room_threshold
+        return self._manager.illuminance_threshold
+
+    @property
     def bed_exit_timer_active(self) -> bool:
         return self._bed_exit_timer is not None
 
@@ -196,6 +220,21 @@ class Room:
 
     def set_presence_lighting_enabled(self, enabled: bool) -> None:
         self._presence_lighting_enabled = enabled
+
+    def set_illuminance_gate_enabled(self, enabled: bool) -> None:
+        self._illuminance_gate_enabled = enabled
+
+    def should_skip_for_illuminance(self) -> bool:
+        """Return True if ambient light is above the threshold and gating is on."""
+        if not self._illuminance_gate_enabled:
+            return False
+        sensor_id = self.illuminance_sensor_id
+        if not sensor_id:
+            return False
+        value = _get_numeric_state(self.hass, sensor_id)
+        if value is None:
+            return False
+        return value >= self.illuminance_threshold
 
     def set_bed_automations_enabled(self, enabled: bool) -> None:
         self._bed_automations_enabled = enabled
@@ -285,6 +324,9 @@ class Room:
     async def _on_presence_detected(self) -> None:
         if not self._presence_lighting_enabled:
             return
+        if self.should_skip_for_illuminance():
+            _LOGGER.debug("Room %s: presence detected but room is bright enough", self.name)
+            return
         _LOGGER.debug("Room %s: presence detected", self.name)
         await self._call_service(
             "light",
@@ -357,7 +399,7 @@ class Room:
         if self.is_lights_on():
             if self.al_switch_id and self.light_entities:
                 coros.append(self.restore_adaptive_lighting())
-        elif self._is_present:
+        elif self._is_present and not self.should_skip_for_illuminance():
             coros.append(
                 self._call_service(
                     "light",

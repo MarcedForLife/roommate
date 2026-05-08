@@ -22,7 +22,13 @@
           "presence": "Presence sensor",
           "bed_presence": "Bed presence sensor",
           "bed_occupants": "Bed occupants sensor",
-          "bed_persons": "Bed persons"
+          "bed_persons": "Bed persons",
+          "illuminance": "Illuminance sensor",
+          "illuminance_threshold": "Illuminance threshold"
+        },
+        "data_description": {
+          "illuminance": "Per-room override; if unset, the global illuminance sensor is used",
+          "illuminance_threshold": "Per-room override in lux; if unset, the global threshold is used. Lights skip turning on when above this."
         }
       },
       "room_devices": {
@@ -125,7 +131,13 @@
           "presence": "Presence sensor",
           "bed_presence": "Bed presence sensor",
           "bed_occupants": "Bed occupants sensor",
-          "bed_persons": "Bed persons"
+          "bed_persons": "Bed persons",
+          "illuminance": "Illuminance sensor",
+          "illuminance_threshold": "Illuminance threshold"
+        },
+        "data_description": {
+          "illuminance": "Per-room override; if unset, the global illuminance sensor is used",
+          "illuminance_threshold": "Per-room override in lux; if unset, the global threshold is used. Lights skip turning on when above this."
         }
       },
       "room_devices": {
