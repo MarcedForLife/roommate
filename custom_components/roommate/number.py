@@ -50,6 +50,8 @@ async def async_setup_entry(
         for key in TUNING_PARAMS:
             if key in BED_TUNING_KEYS and not room.has_bed_sensor:
                 continue
+            if key == CONF_ILLUMINANCE_THRESHOLD and not room.illuminance_sensor_id:
+                continue
             entities.append(RoomTuningNumber(room, key, entry))
 
     if manager.sleep_lights:

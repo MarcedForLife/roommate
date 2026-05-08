@@ -110,7 +110,7 @@ roommate:
       bed_exit_delay: 10             # Seconds, debounce before triggering bed exit
       bed_return_timeout: 180        # Seconds, restore room state on quick return
       presence_off_delay: 0          # Seconds, debounce before lights off
-      illuminance_threshold: 4000    # Lux, overrides global (defaults to global value)
+      illuminance_threshold: 0       # Lux override; 0 means use global threshold
 ```
 
 ### Minimal room (motion sensor + lights only)
