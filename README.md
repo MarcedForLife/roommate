@@ -19,8 +19,9 @@ A Home Assistant integration that automates room behaviour based on presence and
 - **Bed occupancy** handling (dim on entry, restore on exit, wake transition)
 - **Manual override detection** that suppresses presence lighting when you manually turn off a light
 - **Household sleep/wake** coordination across multiple rooms
-- **Quick return snapshot** that restores room state if you get back in bed within a configurable window
+- **Quick return snapshot** that restores room state (lights, fans, paused media) if you get back in bed within a configurable window
 - **Adaptive lighting** integration (restore auto-brightness on bed exit)
+- **Illuminance gating** that skips turning lights on when ambient light is above threshold (global default with per-room overrides)
 - **Guest mode** switch to suppress sleep light activation
 - **Live tuning** via number entities on the device page
 
@@ -58,56 +59,58 @@ flowchart LR
     C -->|"all beds empty<br>sleep modes off"| D["Everyone<br>up"]
 ```
 
-Sleep lights only activate if illuminance is below threshold and guest mode is off.
+Sleep lights only activate when getting up during the sleep cycle, and only if illuminance is below threshold and guest mode is off.
 
 ## Configuration
 
 ```yaml
 roommate:
   # Global settings
-  illuminance_sensor: sensor.illuminance   # optional
-  illuminance_threshold: 4000              # lux, default 4000
-  sleep_lights:                            # lights to manage on sleep/wake
+  illuminance_sensor: sensor.illuminance   # Optional
+  illuminance_threshold: 4000              # Lux, default 4000
+  sleep_lights:                            # Lights to manage on sleep/wake
     - entity_id: light.living_room_lights
-      inhibit:                             # suppress this light when any is on
+      inhibit:                             # Suppress this light when any is on
         - switch.theatre_lighting
-    - light.toilet_light                   # simple form, no inhibitors
-  sleep_modes:                             # switches to toggle on sleep/wake
+    - light.toilet_light                   # Simple form, no inhibitors
+  sleep_modes:                             # Switches to toggle on sleep/wake
     - switch.adaptive_lighting_sleep_mode_living_room
 
   rooms:
     bedroom:
       sensors:
-        presence: binary_sensor.bedroom_mmwave         # required
-        bed:                                           # optional
+        presence: binary_sensor.bedroom_mmwave         # Required
+        illuminance: sensor.bedroom_lux                # Optional, overrides global
+        bed:                                           # Optional
           presence: binary_sensor.bed_occupancy
           occupants: sensor.bed_occupant_count
           persons:
             - person.alice
             - person.bob
 
-      lights:                                          # required
+      lights:                                          # Required
         - light.bedside_lamp_1
         - light.bedside_lamp_2
-      fans:                                            # optional
+      fans:                                            # Optional
         - fan.bedroom_fan
-      speakers:                                        # optional
+      speakers:                                        # Optional
         - media_player.bedroom_speaker
 
-      adaptive_lighting:                               # optional
+      adaptive_lighting:                               # Optional
         switch: switch.adaptive_lighting_bedroom
         sleep_mode: switch.adaptive_lighting_sleep_mode_bedroom
 
       # Tunables (all optional, shown with defaults)
-      dim_brightness: 5              # percent, when getting in bed
-      recently_on_threshold: 8       # seconds, skip dimming if lights just turned on
-      transition_on: 2               # seconds
-      transition_off: 5              # seconds
-      transition_dim: 5              # seconds
-      wake_transition: 60            # seconds, fade lights on when leaving bed
-      bed_exit_delay: 10             # seconds, debounce before triggering bed exit
-      bed_return_timeout: 180        # seconds, restore room state on quick return
-      presence_off_delay: 0          # seconds, debounce before lights off
+      dim_brightness: 5              # Percent, when getting in bed
+      recently_on_threshold: 8       # Seconds, skip dimming if lights just turned on
+      transition_on: 2               # Seconds
+      transition_off: 5              # Seconds
+      transition_dim: 5              # Seconds
+      wake_transition: 60            # Seconds, fade lights on when leaving bed
+      bed_exit_delay: 10             # Seconds, debounce before triggering bed exit
+      bed_return_timeout: 180        # Seconds, restore room state on quick return
+      presence_off_delay: 0          # Seconds, debounce before lights off
+      illuminance_threshold: 4000    # Lux, overrides global (defaults to global value)
 ```
 
 ### Minimal room (motion sensor + lights only)
@@ -125,14 +128,15 @@ rooms:
 
 Per room (using "bedroom" as example):
 
-| Entity                                            | Created when                 | Purpose                                 |
-| ------------------------------------------------- | ---------------------------- | --------------------------------------- |
-| `binary_sensor.roommate_bedroom_presence`         | Always                       | Combined presence (motion OR bed)       |
-| `sensor.roommate_bedroom_room_state`              | Always                       | Diagnostic state (empty/present/in_bed) |
-| `switch.roommate_bedroom_presence_automations`    | Always                       | Toggle presence-based lighting          |
-| `switch.roommate_bedroom_bed_automations`         | Bed sensor configured        | Toggle bed-related automations          |
-| `button.roommate_bedroom_restore_auto_brightness` | Adaptive lighting configured | Restore auto-brightness                 |
-| `number.roommate_bedroom_*`                       | Per tuning param             | Adjust timing and brightness values     |
+| Entity                                            | Created when                          | Purpose                                 |
+| ------------------------------------------------- | ------------------------------------- | --------------------------------------- |
+| `binary_sensor.roommate_bedroom_presence`         | Always                                | Combined presence (motion OR bed)       |
+| `sensor.roommate_bedroom_room_state`              | Always                                | Diagnostic state (empty/present/in_bed) |
+| `switch.roommate_bedroom_presence_automations`    | Always                                | Toggle presence-based lighting          |
+| `switch.roommate_bedroom_bed_automations`         | Bed sensor configured                 | Toggle bed-related automations          |
+| `switch.roommate_bedroom_illuminance_gating`      | Illuminance sensor available          | Off bypasses the lux threshold          |
+| `button.roommate_bedroom_restore_auto_brightness` | Adaptive lighting configured          | Restore auto-brightness                 |
+| `number.roommate_bedroom_*`                       | Per tuning param                      | Adjust timing and brightness values     |
 
 Global:
 

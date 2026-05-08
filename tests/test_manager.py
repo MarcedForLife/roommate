@@ -177,6 +177,57 @@ async def test_on_presence_detected_skipped_when_overridden(
         mock.assert_not_called()
 
 
+async def test_on_presence_detected_skipped_when_room_is_bright(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    room = setup_integration.rooms["bedroom"]
+    hass.states.async_set("sensor.illuminance", "5000")
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_presence_detected()
+        mock.assert_not_called()
+
+
+async def test_on_presence_detected_fires_when_room_is_dark(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    room = setup_integration.rooms["bedroom"]
+    hass.states.async_set("sensor.illuminance", "100")
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_presence_detected()
+        mock.assert_called_once()
+
+
+async def test_illuminance_gate_disabled_bypasses_threshold(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    room = setup_integration.rooms["bedroom"]
+    hass.states.async_set("sensor.illuminance", "5000")
+    room.set_illuminance_gate_enabled(False)
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_presence_detected()
+        mock.assert_called_once()
+
+
+async def test_room_illuminance_threshold_overrides_global(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    room = setup_integration.rooms["bedroom"]
+    # Global threshold is 4000; room override 200 makes 1500 lux too bright
+    room.config["illuminance_threshold"] = 200
+    hass.states.async_set("sensor.illuminance", "1500")
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_presence_detected()
+        mock.assert_not_called()
+
+
 async def test_on_getting_in_bed_dims_lights(
     hass: HomeAssistant,
     setup_integration: RoommateManager,
