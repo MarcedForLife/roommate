@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.const import STATE_HOME
 from homeassistant.core import (
     CALLBACK_TYPE,
+    Context,
     Event,
     EventStateChangedData,
     HomeAssistant,
@@ -113,14 +114,27 @@ class RoommateManager:
         *,
         target: dict[str, Any] | None = None,
         service_data: dict[str, Any] | None = None,
+        context: Context | None = None,
     ) -> None:
         """Call a service, logging (rather than silently swallowing) any failure."""
         try:
             await self.hass.services.async_call(
-                domain, service, service_data=service_data, target=target
+                domain, service, service_data=service_data, target=target, context=context
             )
         except Exception:
             _LOGGER.exception("Roommate: failed to call %s.%s", domain, service)
+
+    def context_for_lights(self, entity_ids: list[str]) -> Context:
+        """Mint a context for a light call and register it with every room whose
+        lights overlap the targets, so those rooms don't misread the resulting state
+        change as a manual override. Used for manager sleep-light calls and for
+        room-issued light calls (a light may be shared between rooms)."""
+        context = Context()
+        targets = set(entity_ids)
+        for room in self._rooms.values():
+            if not targets.isdisjoint(room.light_entities):
+                room.register_context(context.id)
+        return context
 
     async def async_setup(self) -> None:
         """Subscribe to state changes and initialize room states."""
@@ -200,6 +214,7 @@ class RoommateManager:
                     "turn_off",
                     service_data={"transition": transition},
                     target={"entity_id": self.all_sleep_light_ids},
+                    context=self.context_for_lights(self.all_sleep_light_ids),
                 )
             )
         for sleep_mode in self.sleep_modes:
@@ -243,6 +258,7 @@ class RoommateManager:
             "turn_on",
             service_data={"transition": transition},
             target={"entity_id": lights_to_activate},
+            context=self.context_for_lights(lights_to_activate),
         )
 
     async def async_on_everyone_up(self, triggering_room: Room) -> None:
