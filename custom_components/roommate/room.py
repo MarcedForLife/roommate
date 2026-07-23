@@ -634,6 +634,20 @@ class Room:
         self._cancel_presence_off_timer()
         self._clear_snapshot()
 
+    def register_context(self, context_id: str) -> None:
+        """Record a context id as self-induced so handle_light_change ignores its echo.
+
+        Used for this room's own service calls and for manager-issued sleep-light
+        calls that target entities this room also controls.
+        """
+        if context_id in self._our_context_ids:
+            return
+        if len(self._our_context_order) == self._our_context_order.maxlen:
+            evicted = self._our_context_order.popleft()
+            self._our_context_ids.discard(evicted)
+        self._our_context_order.append(context_id)
+        self._our_context_ids.add(context_id)
+
     async def _call_service(
         self,
         domain: str,
@@ -641,12 +655,14 @@ class Room:
         entity_id: str | list[str] | None = None,
         **kwargs: Any,
     ) -> None:
-        context = Context()
-        if len(self._our_context_order) == self._our_context_order.maxlen:
-            evicted = self._our_context_order.popleft()
-            self._our_context_ids.discard(evicted)
-        self._our_context_order.append(context.id)
-        self._our_context_ids.add(context.id)
+        if domain == "light" and entity_id:
+            # A light may be shared with another room; register the context with every
+            # room controlling it so none of them misreads the echo as manual.
+            targets = [entity_id] if isinstance(entity_id, str) else entity_id
+            context = self._manager.context_for_lights(targets)
+        else:
+            context = Context()
+        self.register_context(context.id)
 
         try:
             await self.hass.services.async_call(

@@ -6,7 +6,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.const import STATE_ON
-from homeassistant.core import Context, HomeAssistant, ServiceCall
+from homeassistant.core import Context, HomeAssistant, ServiceCall, callback
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
@@ -743,6 +743,142 @@ async def test_two_person_binary_bed_can_sleep(hass: HomeAssistant, make_manager
     await hass.async_block_till_done()
 
     assert len(calls) > 0  # binary "occupied" counts as both persons in bed
+
+
+def _overlap_config() -> dict:
+    """A room whose light is also a global sleep light, plus a bedroom that drives sleep."""
+    return {
+        DOMAIN: {
+            "sleep_lights": ["light.living_room"],
+            "sleep_modes": ["switch.house_sleep_mode"],
+            "rooms": {
+                "living_room": {
+                    "sensors": {"presence": "binary_sensor.living_presence"},
+                    "lights": ["light.living_room"],
+                },
+                "bedroom": {
+                    "sensors": {
+                        "presence": "binary_sensor.bedroom_presence",
+                        "bed": {
+                            "presence": "binary_sensor.bed_occupancy",
+                            "persons": ["person.alice"],
+                        },
+                    },
+                    "lights": ["light.bedroom_lamp"],
+                },
+            },
+        },
+    }
+
+
+def _propagate_light_state(hass: HomeAssistant, state: str):
+    """Service handler that applies the requested light state, carrying the call context
+    through to the resulting state-change event (as a real light integration would).
+
+    Must be a @callback so it runs in the event loop; a plain function would run in an
+    executor thread where async_set raises and the state-change echo never fires.
+    """
+
+    @callback
+    def _handler(call: ServiceCall) -> None:
+        ids = call.data["entity_id"]
+        for entity_id in [ids] if isinstance(ids, str) else ids:
+            hass.states.async_set(entity_id, state, context=call.context)
+
+    return _handler
+
+
+async def test_sleep_light_off_not_treated_as_manual_override(
+    hass: HomeAssistant, make_manager
+) -> None:
+    """Sleep turning off an overlapping room light must not flip that room to overridden."""
+    manager = await make_manager(_overlap_config())
+    living = manager.rooms["living_room"]
+    bedroom = manager.rooms["bedroom"]
+
+    hass.services.async_register("light", "turn_off", _propagate_light_state(hass, "off"))
+    hass.services.async_register("switch", "turn_on", lambda call: None)
+
+    hass.states.async_set("binary_sensor.living_presence", STATE_ON)
+    living.handle_presence_change()
+    hass.states.async_set("light.living_room", STATE_ON)
+    assert living.is_present
+    assert living.presence_lighting_enabled
+
+    hass.states.async_set("person.alice", "home")
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    await manager.async_on_sleeping(bedroom)
+    await hass.async_block_till_done()
+
+    assert living.presence_lighting_enabled  # not misread as a manual override
+
+
+async def test_sleep_light_on_does_not_wipe_manual_override(
+    hass: HomeAssistant, make_manager
+) -> None:
+    """Waking turning on an overlapping sleep light must not re-enable a real override."""
+    manager = await make_manager(_overlap_config())
+    living = manager.rooms["living_room"]
+    bedroom = manager.rooms["bedroom"]
+
+    hass.services.async_register("light", "turn_on", _propagate_light_state(hass, STATE_ON))
+
+    # Living room present, then the user manually turns the light off (a real override).
+    hass.states.async_set("binary_sensor.living_presence", STATE_ON)
+    living.handle_presence_change()
+    hass.states.async_set("light.living_room", STATE_ON)
+    living.handle_light_change(STATE_ON, "off", Context())
+    hass.states.async_set("light.living_room", "off")
+    assert not living.presence_lighting_enabled
+
+    # Someone gets up; sleep mode active so waking turns the sleep light back on.
+    hass.states.async_set("switch.house_sleep_mode", STATE_ON)
+    await manager.async_on_waking(bedroom)
+    await hass.async_block_till_done()
+
+    assert not living.presence_lighting_enabled  # override preserved
+
+
+async def test_room_light_call_ignored_by_room_sharing_the_light(
+    hass: HomeAssistant, make_manager
+) -> None:
+    """A room's own light call must not read as a manual override in a room sharing it."""
+    config = {
+        DOMAIN: {
+            "rooms": {
+                "study": {
+                    "sensors": {"presence": "binary_sensor.study_presence"},
+                    "lights": ["light.shared", "light.study_lamp"],
+                },
+                "hall": {
+                    "sensors": {"presence": "binary_sensor.hall_presence"},
+                    "lights": ["light.shared"],
+                },
+            },
+        },
+    }
+    manager = await make_manager(config)
+    study = manager.rooms["study"]
+    hall = manager.rooms["hall"]
+
+    hass.services.async_register("light", "turn_on", _propagate_light_state(hass, STATE_ON))
+
+    hass.states.async_set("light.shared", "off")
+    hass.states.async_set("binary_sensor.study_presence", "off")
+    await hass.async_block_till_done()
+
+    # The hall's lighting is overridden; the study's automation turning the shared
+    # light on must not be misread as a manual light-on that clears the override.
+    hall.set_presence_lighting_enabled(False)
+
+    hass.states.async_set("binary_sensor.study_presence", STATE_ON)
+    await hass.async_block_till_done()
+    # The tracker defers dispatch via loop.call_soon, and the light echo is induced
+    # one dispatch deep (presence event -> light call), so settle one more iteration.
+    await hass.async_block_till_done()
+
+    assert study.presence_lighting_enabled
+    assert not hall.presence_lighting_enabled  # override preserved
 
 
 async def test_everyone_up_ignores_non_participating_bed(hass: HomeAssistant, make_manager) -> None:
