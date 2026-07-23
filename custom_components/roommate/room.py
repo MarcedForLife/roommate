@@ -199,20 +199,36 @@ class Room:
     def is_lights_on(self) -> bool:
         return any(_entity_is_on(self.hass, light) for light in self.light_entities)
 
-    def _is_bed_occupied(self) -> bool:
+    def _bed_occupancy_reading(self) -> bool | None:
+        """Union of the configured bed sensors, or None when neither has a valid state."""
+        reading: bool | None = None
         bed_id = self.bed_sensor_id
         if bed_id:
-            return _entity_is_on(self.hass, bed_id)
+            state = self.hass.states.get(bed_id)
+            if state is not None and state.state not in INVALID_STATES:
+                reading = state.state == STATE_ON
         occ_id = self.occupant_count_id
         if occ_id:
             count = _get_numeric_state(self.hass, occ_id)
-            return count is not None and count > 0
-        return False
+            if count is not None:
+                reading = bool(reading) or count > 0
+        return reading
+
+    def _is_bed_occupied(self) -> bool:
+        # Occupied if either sensor reports occupancy, so a count of 0 from one sensor
+        # can't override a binary sensor that says the bed is in use (and vice versa).
+        # With no valid sensor data at all, keep the cached value rather than assuming
+        # empty, matching how the event handler freezes state while unavailable.
+        reading = self._bed_occupancy_reading()
+        return self._is_in_bed if reading is None else reading
 
     def get_occupant_count(self) -> int:
         occ_id = self.occupant_count_id
         if occ_id:
-            return int(_get_numeric_state(self.hass, occ_id) or 0)
+            count = _get_numeric_state(self.hass, occ_id)
+            if count is not None:
+                return int(count)
+        # No count sensor, or no valid reading from it: fall back to the binary sensor.
         if self.bed_sensor_id:
             return 1 if _entity_is_on(self.hass, self.bed_sensor_id) else 0
         return 0
@@ -252,6 +268,9 @@ class Room:
 
     def set_bed_automations_enabled(self, enabled: bool) -> None:
         self._bed_automations_enabled = enabled
+        if not enabled:
+            # Don't let a debounce started while enabled fire after the user disabled it.
+            self._cancel_bed_exit_timer()
 
     @callback
     def handle_presence_change(self) -> None:
@@ -300,7 +319,9 @@ class Room:
         except (ValueError, TypeError):
             return
 
-        # Room-level bed entry/exit for rooms without a bed presence sensor
+        # Room-level bed entry/exit for rooms without a bed presence sensor.
+        # Route through the same debounce/cancellation as the binary-bed path so the
+        # bed_exit_delay applies and a quick occupant flap can't race entry vs exit.
         if not self.bed_sensor_id:
             if new_count > 0 and old_count == 0:
                 self._is_in_bed = True
@@ -309,7 +330,7 @@ class Room:
             elif new_count == 0 and old_count > 0:
                 self._is_in_bed = False
                 if self._bed_automations_enabled:
-                    self.hass.async_create_task(self._on_leaving_bed())
+                    self._start_bed_exit_timer()
 
         # Household-level sleep/wake
         if self._bed_automations_enabled:
@@ -347,6 +368,10 @@ class Room:
     async def _on_presence_detected(self) -> None:
         if not self._presence_lighting_enabled:
             return
+        if self._is_in_bed:
+            # Presence flipped on via the bed union (or a recovery) while in bed; the
+            # bed logic owns the lights, don't blast them to full brightness.
+            return
         if self.should_skip_for_illuminance():
             _LOGGER.debug("Room %s: presence detected but room is bright enough", self.name)
             return
@@ -360,6 +385,11 @@ class Room:
 
     async def _on_presence_ended(self) -> None:
         if not self._presence_lighting_enabled:
+            return
+        # Re-read live presence: the presence_off_delay==0 path schedules this directly
+        # without the recheck the timer callback does, so a quick off->on flap must not
+        # turn the lights off while the room is occupied again.
+        if self._is_present:
             return
         _LOGGER.debug("Room %s: presence ended", self.name)
         await self._call_service(
@@ -375,16 +405,18 @@ class Room:
             await self._restore_snapshot()
             return
 
-        if not self.is_lights_on():
+        # Base the "recently on" decision on the most recently changed light that is
+        # currently on, not just the first configured light (which may be off).
+        on_lights = [
+            state
+            for light_id in self.light_entities
+            if (state := self.hass.states.get(light_id)) is not None and state.state == STATE_ON
+        ]
+        if not on_lights:
             return
 
-        first_light = self.hass.states.get(self.light_entities[0])
-        elapsed = (
-            (dt_util.utcnow() - first_light.last_changed).total_seconds()
-            if first_light
-            else float("inf")
-        )
-
+        latest_change = max(state.last_changed for state in on_lights)
+        elapsed = (dt_util.utcnow() - latest_change).total_seconds()
         if elapsed < self.config[CONF_RECENTLY_ON_THRESHOLD]:
             _LOGGER.debug("Room %s: getting in bed, lights recently on, turning off", self.name)
             await self._call_service(
@@ -405,13 +437,26 @@ class Room:
             )
 
     async def _on_leaving_bed(self) -> None:
+        if self._is_in_bed:
+            # Already back in bed before this task ran (a delay-0 flap); skip the leave
+            # entirely so the room sleep mode isn't toggled off under the sleeper.
+            return
         _LOGGER.debug("Room %s: leaving bed", self.name)
 
         self._save_snapshot()
+        # Capture before any await: a quick return restores and clears the snapshot,
+        # which would otherwise flip the speaker handling below from pause to stop.
+        snapshot_active = self._pre_exit_snapshot is not None
 
         # Disable room-level sleep mode
         if self.sleep_mode_id:
             await self._call_service("switch", "turn_off", entity_id=self.sleep_mode_id)
+
+        if self._is_in_bed:
+            # Returned to bed while leaving; a getting-in-bed handler has taken over
+            # (and may have restored the snapshot). Abort the rest of the leave.
+            _LOGGER.debug("Room %s: leaving-bed superseded by re-entry, aborting", self.name)
+            return
 
         coros: list = []
 
@@ -435,7 +480,6 @@ class Room:
         for fan in self.config[CONF_FANS]:
             coros.append(self._call_service("fan", "turn_off", entity_id=fan))
 
-        snapshot_active = self._pre_exit_snapshot is not None
         for speaker in self.config[CONF_SPEAKERS]:
             if snapshot_active:
                 # Pause playing speakers so we can resume on quick return

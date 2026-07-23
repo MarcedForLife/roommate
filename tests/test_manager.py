@@ -136,6 +136,10 @@ async def test_occupant_count_handles_invalid_state(
     hass.states.async_set("sensor.bed_occupants", "unavailable")
     assert room.get_occupant_count() == 0
 
+    # An invalid count falls back to the binary bed sensor instead of reading 0.
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    assert room.get_occupant_count() == 1
+
 
 async def test_is_lights_on(
     hass: HomeAssistant,
@@ -881,6 +885,92 @@ async def test_room_light_call_ignored_by_room_sharing_the_light(
     assert not hall.presence_lighting_enabled  # override preserved
 
 
+async def test_presence_off_rechecks_live_presence(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """_on_presence_ended must skip the turn-off if the room is present again.
+
+    The default presence_off_delay is 0, so the off action is scheduled directly with
+    no debounce; a quick off->on flap must not turn the lights off under the room.
+    """
+    room = setup_integration.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_off", lambda call: calls.append(call))
+
+    # Presence has returned by the time the scheduled off action runs.
+    hass.states.async_set("binary_sensor.bedroom_presence", STATE_ON)
+    room.handle_presence_change()
+    assert room.is_present
+
+    await room._on_presence_ended()
+
+    assert len(calls) == 0  # lights not turned off while present
+
+
+async def test_bed_exit_timer_cancelled_when_automations_disabled(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """Disabling bed automations cancels a pending bed-exit timer."""
+    room = setup_integration.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("fan", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    room.handle_bed_change("off", STATE_ON)
+    hass.states.async_set("binary_sensor.bed_occupancy", "off")
+    room.handle_bed_change(STATE_ON, "off")
+    assert room.bed_exit_timer_active
+
+    room.set_bed_automations_enabled(False)
+    assert not room.bed_exit_timer_active
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=15))
+    await hass.async_block_till_done()
+    assert len(calls) == 0
+
+
+async def test_occupant_bed_exit_uses_debounce(hass: HomeAssistant, make_manager) -> None:
+    """Occupant-count bed exit goes through the bed-exit delay like a binary bed."""
+    config = {
+        DOMAIN: {
+            "rooms": {
+                "bedroom": {
+                    "sensors": {
+                        "presence": "binary_sensor.bedroom_presence",
+                        "bed": {"occupants": "sensor.bed_count"},
+                    },
+                    "lights": ["light.bedroom_lamp"],
+                    "fans": ["fan.bedroom_fan"],
+                },
+            },
+        },
+    }
+    manager = await make_manager(config)
+    room = manager.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("fan", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("sensor.bed_count", "1")
+    room.handle_occupant_change("0", "1")
+    assert room.is_in_bed
+
+    hass.states.async_set("sensor.bed_count", "0")
+    room.handle_occupant_change("1", "0")
+    assert not room.is_in_bed
+    assert room.bed_exit_timer_active
+    await hass.async_block_till_done()
+    assert len(calls) == 0  # debounced, not fired yet
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=15))
+    await hass.async_block_till_done()
+    assert any(c.domain == "fan" for c in calls)
+
+
 async def test_everyone_up_ignores_non_participating_bed(hass: HomeAssistant, make_manager) -> None:
     """A bed without bed_persons must not keep household sleep modes on."""
     config = {
@@ -984,6 +1074,173 @@ async def test_illuminance_threshold_zero_disables_gating(
 
     hass.states.async_set("sensor.lux", "5000")
     assert room.should_skip_for_illuminance() is False
+
+
+async def test_leaving_bed_aborts_on_reentry(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """If the user returns to bed mid-leave, the rest of the leave actions abort."""
+    room = setup_integration.rooms["bedroom"]
+    hass.states.async_set("light.lamp_1", "off")
+    hass.states.async_set("light.lamp_2", "off")
+    hass.states.async_set("fan.bedroom_fan", STATE_ON)
+
+    async def fake_call(domain: str, service: str, **kwargs: object) -> None:
+        if domain == "switch" and service == "turn_off":
+            room._is_in_bed = True  # back in bed while the sleep-mode call is awaiting
+
+    mock = AsyncMock(side_effect=fake_call)
+    with patch.object(room, "_call_service", mock):
+        await room._on_leaving_bed()
+
+    assert not [c for c in mock.call_args_list if c.args[0] == "fan"]  # leave aborted
+
+    room.cancel_timers()
+
+
+async def test_leaving_bed_speaker_pause_uses_presnapshot_state(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """Speaker pause/stop is decided from the pre-await snapshot state."""
+    room = setup_integration.rooms["bedroom"]
+    hass.states.async_set("light.lamp_1", "off")
+    hass.states.async_set("light.lamp_2", "off")
+    hass.states.async_set("media_player.bedroom_speaker", "playing")
+
+    async def fake_call(domain: str, service: str, **kwargs: object) -> None:
+        if domain == "switch" and service == "turn_off":
+            room._pre_exit_snapshot = None  # snapshot cleared mid-await (not a re-entry)
+
+    mock = AsyncMock(side_effect=fake_call)
+    with patch.object(room, "_call_service", mock):
+        await room._on_leaving_bed()
+
+    speaker_calls = [c for c in mock.call_args_list if c.args[0] == "media_player"]
+    assert len(speaker_calls) == 1
+    assert speaker_calls[0].args[1] == "media_pause"  # not media_stop
+
+    room.cancel_timers()
+
+
+async def test_recently_on_uses_latest_on_light(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """The recently-on decision keys off the on-light, not light_entities[0]."""
+    room = setup_integration.rooms["bedroom"]
+
+    # First configured light is OFF and changed just now; the other is ON but old.
+    hass.states.async_set("light.lamp_1", "off")
+    hass.states.async_set("light.lamp_2", STATE_ON)
+    hass.states.get("light.lamp_2").last_changed = dt_util.utcnow() - timedelta(minutes=5)
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_getting_in_bed()
+        mock.assert_called_once()
+        # lamp_2 has been on for 5 minutes -> dim, not turn off.
+        assert mock.call_args.kwargs.get("brightness_pct") == 5
+
+
+async def test_occupant_change_refreshes_presence(hass: HomeAssistant, make_manager) -> None:
+    """An occupants-only room's combined presence updates on occupant changes."""
+    config = {
+        DOMAIN: {
+            "rooms": {
+                "bedroom": {
+                    "sensors": {
+                        "presence": "binary_sensor.bedroom_presence",
+                        "bed": {"occupants": "sensor.bed_count"},
+                    },
+                    "lights": ["light.bedroom_lamp"],
+                },
+            },
+        },
+    }
+    manager = await make_manager(config)
+    room = manager.rooms["bedroom"]
+
+    hass.states.async_set("binary_sensor.bedroom_presence", "off")
+    hass.states.async_set("sensor.bed_count", "0")
+    await hass.async_block_till_done()
+    assert not room.is_present
+
+    hass.states.async_set("sensor.bed_count", "2")
+    await hass.async_block_till_done()
+    assert room.is_present  # combined presence reflects bed occupancy
+
+
+async def test_bed_occupied_is_union_of_sensors(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """With both bed sensors, either reporting occupancy counts as occupied."""
+    room = setup_integration.rooms["bedroom"]
+
+    hass.states.async_set("binary_sensor.bed_occupancy", "off")
+    hass.states.async_set("sensor.bed_occupants", "2")
+    assert room._is_bed_occupied()
+
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    hass.states.async_set("sensor.bed_occupants", "0")
+    assert room._is_bed_occupied()
+
+    hass.states.async_set("binary_sensor.bed_occupancy", "off")
+    hass.states.async_set("sensor.bed_occupants", "0")
+    assert not room._is_bed_occupied()
+
+
+async def test_presence_held_while_bed_sensor_unavailable(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """A presence flicker while the bed sensor is unavailable must not end presence."""
+    room = setup_integration.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("binary_sensor.bedroom_presence", STATE_ON)
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    await hass.async_block_till_done()
+    assert room.is_in_bed
+    assert room.is_present
+
+    hass.states.async_set("binary_sensor.bed_occupancy", "unavailable")
+    hass.states.async_set("binary_sensor.bedroom_presence", "off")
+    await hass.async_block_till_done()
+
+    assert room.is_present  # held by the cached bed state
+    assert len(calls) == 0
+
+
+async def test_presence_detected_skipped_while_in_bed(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """Presence flipping on via the bed union must not blast lights while in bed."""
+    room = setup_integration.rooms["bedroom"]
+    room._is_in_bed = True
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_presence_detected()
+        mock.assert_not_called()
+
+
+async def test_leaving_bed_noop_when_already_back_in_bed(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """A leave task that runs after a re-entry must not act at all."""
+    room = setup_integration.rooms["bedroom"]
+    room._is_in_bed = True
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_leaving_bed()
+        mock.assert_not_called()
+
+    assert room._pre_exit_snapshot is None
 
 
 def _two_person_household_config() -> dict:
