@@ -84,3 +84,21 @@ async def setup_integration(hass: HomeAssistant, full_config: dict):
     yield manager
     manager.shutdown()
     await hass.async_block_till_done()
+
+
+@pytest.fixture
+async def make_manager(hass: HomeAssistant):
+    """Factory for managers with ad-hoc topologies, torn down even when a test fails."""
+    managers: list[RoommateManager] = []
+
+    async def _make(config: dict) -> RoommateManager:
+        validated = CONFIG_SCHEMA(config)
+        manager = RoommateManager(hass, validated[DOMAIN])
+        await manager.async_setup()
+        managers.append(manager)
+        return manager
+
+    yield _make
+    for manager in managers:
+        manager.shutdown()
+    await hass.async_block_till_done()

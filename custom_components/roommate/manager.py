@@ -31,7 +31,7 @@ from .const import (
     CONF_SLEEP_LIGHTS,
     CONF_SLEEP_MODES,
 )
-from .room import INVALID_STATES, Room, _entity_is_on, _get_numeric_state
+from .room import INVALID_STATES, Room, _entity_is_on
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -99,8 +99,28 @@ class RoommateManager:
         """Update a global config value in memory."""
         self._config[key] = value
 
+    def get_config(self, key: str, default: Any = None) -> Any:
+        """Read a global config value."""
+        return self._config.get(key, default)
+
     def _register(self, entity_id: str, room: Room, role: str) -> None:
         self._entity_map.setdefault(entity_id, []).append((room, role))
+
+    async def _call_service(
+        self,
+        domain: str,
+        service: str,
+        *,
+        target: dict[str, Any] | None = None,
+        service_data: dict[str, Any] | None = None,
+    ) -> None:
+        """Call a service, logging (rather than silently swallowing) any failure."""
+        try:
+            await self.hass.services.async_call(
+                domain, service, service_data=service_data, target=target
+            )
+        except Exception:
+            _LOGGER.exception("Roommate: failed to call %s.%s", domain, service)
 
     async def async_setup(self) -> None:
         """Subscribe to state changes and initialize room states."""
@@ -160,7 +180,14 @@ class RoommateManager:
                 for pid in room.bed_persons
                 if _entity_is_on(self.hass, pid, target_state=STATE_HOME)
             )
-            if persons_home > 0 and room.get_occupant_count() < persons_home:
+            if persons_home == 0:
+                continue
+            if room.has_occupant_count:
+                if room.get_occupant_count() < persons_home:
+                    return
+            elif room.get_occupant_count() == 0:
+                # Binary bed sensor can't count heads; treat "occupied" as
+                # satisfying all home persons being in this bed.
                 return
 
         _LOGGER.debug("Everyone is in bed")
@@ -168,7 +195,7 @@ class RoommateManager:
         coros: list = []
         if self.all_sleep_light_ids:
             coros.append(
-                self.hass.services.async_call(
+                self._call_service(
                     "light",
                     "turn_off",
                     service_data={"transition": transition},
@@ -176,15 +203,9 @@ class RoommateManager:
                 )
             )
         for sleep_mode in self.sleep_modes:
-            coros.append(
-                self.hass.services.async_call(
-                    "switch",
-                    "turn_on",
-                    target={"entity_id": sleep_mode},
-                )
-            )
+            coros.append(self._call_service("switch", "turn_on", target={"entity_id": sleep_mode}))
         if coros:
-            await asyncio.gather(*coros, return_exceptions=True)
+            await asyncio.gather(*coros)
 
     async def async_on_waking(self, room: Room) -> None:
         """Someone got up, turn on uninhibited sleep lights."""
@@ -197,11 +218,10 @@ class RoommateManager:
         ):
             return
 
-        illuminance_id = self._config.get(CONF_ILLUMINANCE_SENSOR)
-        if illuminance_id:
-            value = _get_numeric_state(self.hass, illuminance_id)
-            if value is not None and value >= self._config[CONF_ILLUMINANCE_THRESHOLD]:
-                return
+        # Gate sleep lights through the triggering room so the per-room illuminance
+        # gate switch, sensor override and threshold all apply consistently.
+        if room.should_skip_for_illuminance():
+            return
 
         if self._guest_mode:
             return
@@ -218,7 +238,7 @@ class RoommateManager:
 
         _LOGGER.debug("Someone got up in %s, turning on sleep lights", room.name)
         transition = self._config[CONF_SLEEP_LIGHT_TRANSITION]
-        await self.hass.services.async_call(
+        await self._call_service(
             "light",
             "turn_on",
             service_data={"transition": transition},
@@ -230,21 +250,19 @@ class RoommateManager:
         if not triggering_room.bed_persons or not self.sleep_modes:
             return
 
-        # Check if any bed still has occupants (use live state, not cached)
+        # Only rooms that participate in household sleep (have bed_persons) should
+        # block, matching async_on_sleeping's room set. A bed used purely for
+        # room-level dimming must not keep the household sleep modes on.
         for room in self._rooms.values():
-            if room.has_bed_sensor and room.get_occupant_count() > 0:
+            if room.bed_persons and room.get_occupant_count() > 0:
                 return
 
         _LOGGER.debug("Everyone is up, disabling sleep modes")
         coros = [
-            self.hass.services.async_call(
-                "switch",
-                "turn_off",
-                target={"entity_id": mode},
-            )
+            self._call_service("switch", "turn_off", target={"entity_id": mode})
             for mode in self.sleep_modes
         ]
-        await asyncio.gather(*coros, return_exceptions=True)
+        await asyncio.gather(*coros)
 
     @callback
     def shutdown(self) -> None:
