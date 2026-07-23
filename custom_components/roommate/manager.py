@@ -175,6 +175,9 @@ class RoommateManager:
                 room.handle_presence_change()
                 room.handle_bed_change(old_state.state, new_state.state)
             elif role == "occupant":
+                # Refresh combined presence too (mirrors the bed role) so an
+                # occupants-only room's presence sensor doesn't go stale.
+                room.handle_presence_change()
                 room.handle_occupant_change(old_state.state, new_state.state)
             elif role == "light":
                 room.handle_light_change(old_state.state, new_state.state, new_state.context)
