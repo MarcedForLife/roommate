@@ -50,6 +50,8 @@ stateDiagram-v2
 | **In Bed**     | Lights dimmed or off, fans/speakers controlled                  |
 | **Overridden** | Presence lighting suppressed until manual light-on or bed empty |
 
+The `room_state` diagnostic sensor reports `empty`, `present`, or `in_bed`. Overridden is not a separate value, it is surfaced as the sensor's `presence_lighting` attribute (`active` or `overridden`).
+
 When a room has `bed.persons` configured, it participates in the household sleep/wake lifecycle:
 
 ```mermaid

@@ -6,11 +6,11 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.const import STATE_ON
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import Context, HomeAssistant, ServiceCall
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
-from custom_components.roommate.const import CONF_BED_RETURN_TIMEOUT
+from custom_components.roommate.const import CONF_BED_RETURN_TIMEOUT, DOMAIN
 from custom_components.roommate.manager import RoommateManager
 
 
@@ -79,8 +79,6 @@ async def test_manual_override_ignores_own_context(
     hass: HomeAssistant,
     setup_integration: RoommateManager,
 ) -> None:
-    from homeassistant.core import Context
-
     room = setup_integration.rooms["bedroom"]
     hass.states.async_set("binary_sensor.bedroom_presence", STATE_ON)
     room.handle_presence_change()
@@ -239,6 +237,7 @@ async def test_on_getting_in_bed_dims_lights(
     hass.states.async_set("light.lamp_1", STATE_ON)
     hass.states.async_set("light.lamp_2", STATE_ON)
     hass.states.get("light.lamp_1").last_changed = old_time
+    hass.states.get("light.lamp_2").last_changed = old_time
 
     with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
         await room._on_getting_in_bed()
@@ -684,3 +683,253 @@ async def test_state_restored_on_recovery_from_unavailable(
     hass.states.async_set("binary_sensor.bedroom_presence", STATE_ON)
     await hass.async_block_till_done()
     assert room.is_present
+
+
+def _binary_bed_config(persons: list[str]) -> dict:
+    """Config with a binary-only bed (no occupant count) participating in sleep."""
+    return {
+        DOMAIN: {
+            "sleep_lights": ["light.living_room"],
+            "sleep_modes": ["switch.house_sleep_mode"],
+            "rooms": {
+                "bedroom": {
+                    "sensors": {
+                        "presence": "binary_sensor.bedroom_presence",
+                        "bed": {
+                            "presence": "binary_sensor.bed_occupancy",
+                            "persons": persons,
+                        },
+                    },
+                    "lights": ["light.bedroom_lamp"],
+                },
+            },
+        },
+    }
+
+
+async def test_binary_bed_triggers_household_sleep(hass: HomeAssistant, make_manager) -> None:
+    """A binary-only bed must activate household sleep on bed entry."""
+    manager = await make_manager(_binary_bed_config(["person.alice"]))
+    room = manager.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_off", lambda call: calls.append(call))
+    hass.services.async_register("switch", "turn_on", lambda call: calls.append(call))
+
+    hass.states.async_set("person.alice", "home")
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    room.handle_bed_change("off", STATE_ON)
+    await hass.async_block_till_done()
+
+    domains = {c.domain for c in calls}
+    assert "light" in domains  # sleep lights turned off
+    assert "switch" in domains  # sleep modes turned on
+
+
+async def test_two_person_binary_bed_can_sleep(hass: HomeAssistant, make_manager) -> None:
+    """Two assigned persons on a single binary mat must not block sleep."""
+    manager = await make_manager(_binary_bed_config(["person.alice", "person.bob"]))
+    room = manager.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_off", lambda call: calls.append(call))
+    hass.services.async_register("switch", "turn_on", lambda call: calls.append(call))
+
+    hass.states.async_set("person.alice", "home")
+    hass.states.async_set("person.bob", "home")
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+
+    await manager.async_on_sleeping(room)
+    await hass.async_block_till_done()
+
+    assert len(calls) > 0  # binary "occupied" counts as both persons in bed
+
+
+async def test_everyone_up_ignores_non_participating_bed(hass: HomeAssistant, make_manager) -> None:
+    """A bed without bed_persons must not keep household sleep modes on."""
+    config = {
+        DOMAIN: {
+            "sleep_modes": ["switch.house_sleep_mode"],
+            "rooms": {
+                "bedroom": {
+                    "sensors": {
+                        "presence": "binary_sensor.bedroom_presence",
+                        "bed": {"occupants": "sensor.bed_count", "persons": ["person.alice"]},
+                    },
+                    "lights": ["light.bedroom_lamp"],
+                },
+                "guest_room": {
+                    "sensors": {
+                        "presence": "binary_sensor.guest_presence",
+                        "bed": {"occupants": "sensor.guest_count"},
+                    },
+                    "lights": ["light.guest_lamp"],
+                },
+            },
+        },
+    }
+    manager = await make_manager(config)
+    bedroom = manager.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("switch", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("sensor.bed_count", "0")  # the household sleeper is up
+    hass.states.async_set("sensor.guest_count", "1")  # unrelated guest still in bed
+
+    await manager.async_on_everyone_up(bedroom)
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1  # sleep modes disabled despite the guest bed
+
+
+async def test_waking_honors_room_illuminance_gate(hass: HomeAssistant, make_manager) -> None:
+    """Disabling a room's illuminance gate makes sleep lights fire even when bright."""
+    config = {
+        DOMAIN: {
+            "illuminance_sensor": "sensor.lux",
+            "illuminance_threshold": 100,
+            "sleep_lights": ["light.hall"],
+            "sleep_modes": ["switch.house_sleep_mode"],
+            "rooms": {
+                "bedroom": {
+                    "sensors": {
+                        "presence": "binary_sensor.bedroom_presence",
+                        "bed": {
+                            "presence": "binary_sensor.bed_occupancy",
+                            "persons": ["person.alice"],
+                        },
+                    },
+                    "lights": ["light.bedroom_lamp"],
+                },
+            },
+        },
+    }
+    manager = await make_manager(config)
+    room = manager.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call))
+
+    hass.states.async_set("switch.house_sleep_mode", STATE_ON)
+    hass.states.async_set("sensor.lux", "500")  # above threshold -> gated
+
+    await manager.async_on_waking(room)
+    await hass.async_block_till_done()
+    assert len(calls) == 0
+
+    room.set_illuminance_gate_enabled(False)
+    await manager.async_on_waking(room)
+    await hass.async_block_till_done()
+    assert len(calls) == 1  # gate off -> sleep lights fire despite brightness
+
+
+async def test_illuminance_threshold_zero_disables_gating(
+    hass: HomeAssistant, make_manager
+) -> None:
+    """An effective illuminance threshold of 0 means gating off, not always-skip."""
+    config = {
+        DOMAIN: {
+            "illuminance_sensor": "sensor.lux",
+            "illuminance_threshold": 0,
+            "rooms": {
+                "bedroom": {
+                    "sensors": {
+                        "presence": "binary_sensor.bedroom_presence",
+                        "illuminance": "sensor.lux",
+                    },
+                    "lights": ["light.bedroom_lamp"],
+                },
+            },
+        },
+    }
+    manager = await make_manager(config)
+    room = manager.rooms["bedroom"]
+
+    hass.states.async_set("sensor.lux", "5000")
+    assert room.should_skip_for_illuminance() is False
+
+
+def _two_person_household_config() -> dict:
+    """Two separate bedrooms, each with one assigned person, sharing the household."""
+    return {
+        DOMAIN: {
+            "sleep_lights": ["light.hall"],
+            "sleep_modes": ["switch.house_sleep_mode"],
+            "rooms": {
+                "alice_room": {
+                    "sensors": {
+                        "presence": "binary_sensor.alice_presence",
+                        "bed": {"occupants": "sensor.alice_count", "persons": ["person.alice"]},
+                    },
+                    "lights": ["light.alice_lamp"],
+                },
+                "bob_room": {
+                    "sensors": {
+                        "presence": "binary_sensor.bob_presence",
+                        "bed": {"occupants": "sensor.bob_count", "persons": ["person.bob"]},
+                    },
+                    "lights": ["light.bob_lamp"],
+                },
+            },
+        },
+    }
+
+
+async def test_multi_room_sleep_requires_all_rooms(hass: HomeAssistant, make_manager) -> None:
+    """Household sleep activates only once every participating room is occupied."""
+    manager = await make_manager(_two_person_household_config())
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_off", lambda call: calls.append(call))
+    hass.services.async_register("switch", "turn_on", lambda call: calls.append(call))
+
+    hass.states.async_set("person.alice", "home")
+    hass.states.async_set("person.bob", "home")
+    hass.states.async_set("sensor.alice_count", "1")
+    hass.states.async_set("sensor.bob_count", "0")
+
+    await manager.async_on_sleeping(manager.rooms["alice_room"])
+    await hass.async_block_till_done()
+    assert len(calls) == 0  # bob is still up
+
+    hass.states.async_set("sensor.bob_count", "1")
+    await manager.async_on_sleeping(manager.rooms["bob_room"])
+    await hass.async_block_till_done()
+    assert len(calls) > 0  # everyone in bed -> sleep
+
+
+async def test_multi_room_everyone_up_requires_all_empty(hass: HomeAssistant, make_manager) -> None:
+    """Sleep modes stay on until every participating bed is empty."""
+    manager = await make_manager(_two_person_household_config())
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("switch", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("sensor.alice_count", "0")
+    hass.states.async_set("sensor.bob_count", "1")
+
+    await manager.async_on_everyone_up(manager.rooms["alice_room"])
+    await hass.async_block_till_done()
+    assert len(calls) == 0  # bob is still in bed
+
+    hass.states.async_set("sensor.bob_count", "0")
+    await manager.async_on_everyone_up(manager.rooms["bob_room"])
+    await hass.async_block_till_done()
+    assert len(calls) > 0  # everyone up -> sleep modes off
+
+
+async def test_service_failure_does_not_propagate(hass: HomeAssistant, make_manager) -> None:
+    """A failing service call is logged, not raised, so coordination still completes."""
+    manager = await make_manager(_two_person_household_config())
+
+    def boom(call: ServiceCall) -> None:
+        raise RuntimeError("boom")
+
+    hass.services.async_register("switch", "turn_off", boom)
+    hass.states.async_set("sensor.alice_count", "0")
+    hass.states.async_set("sensor.bob_count", "0")
+
+    # Must not raise despite the failing sleep-mode service call.
+    await manager.async_on_everyone_up(manager.rooms["alice_room"])
+    await hass.async_block_till_done()

@@ -170,7 +170,7 @@ class GlobalSettingNumber(NumberEntity):
 
     @property
     def native_value(self) -> float:
-        return self._manager._config.get(self._key, 0)
+        return self._manager.get_config(self._key, 0)
 
     async def async_set_native_value(self, value: float) -> None:
         """Update the global setting and persist without reloading."""

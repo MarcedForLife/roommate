@@ -128,6 +128,15 @@ class Room:
         return self._bed_sensors.get(CONF_PERSONS, [])
 
     @property
+    def bed_presence_drives_household(self) -> bool:
+        """Whether a bed-presence transition drives this room's household sleep/wake.
+
+        True for rooms with bed_persons but no occupant-count sensor; occupant-count
+        rooms drive the household from count deltas in handle_occupant_change instead.
+        """
+        return bool(self.bed_persons) and not self.has_occupant_count
+
+    @property
     def light_entities(self) -> list[str]:
         return self.config[CONF_LIGHTS]
 
@@ -231,10 +240,15 @@ class Room:
         sensor_id = self.illuminance_sensor_id
         if not sensor_id:
             return False
+        threshold = self.illuminance_threshold
+        if threshold <= 0:
+            # A non-positive effective threshold means gating is disabled, not
+            # "skip whenever there is any light".
+            return False
         value = _get_numeric_state(self.hass, sensor_id)
         if value is None:
             return False
-        return value >= self.illuminance_threshold
+        return value >= threshold
 
     def set_bed_automations_enabled(self, enabled: bool) -> None:
         self._bed_automations_enabled = enabled
@@ -255,13 +269,22 @@ class Room:
         if self.diagnostic_entity:
             self.diagnostic_entity.async_write_ha_state()
 
+    def _begin_getting_in_bed(self) -> None:
+        """Schedule bed-entry actions: room dimming, plus (for binary beds) the
+        household sleep check. Occupant-count beds drive the household from count
+        deltas, so the household call is gated on bed_presence_drives_household.
+        """
+        self._cancel_bed_exit_timer()
+        self.hass.async_create_task(self._on_getting_in_bed())
+        if self.bed_presence_drives_household:
+            self.hass.async_create_task(self._manager.async_on_sleeping(self))
+
     @callback
     def handle_bed_change(self, old: str, new: str) -> None:
         if new == STATE_ON and old != STATE_ON:
             self._is_in_bed = True
             if self._bed_automations_enabled:
-                self._cancel_bed_exit_timer()
-                self.hass.async_create_task(self._on_getting_in_bed())
+                self._begin_getting_in_bed()
         elif old == STATE_ON and new != STATE_ON:
             self._is_in_bed = False
             if self._bed_automations_enabled:
@@ -282,7 +305,7 @@ class Room:
             if new_count > 0 and old_count == 0:
                 self._is_in_bed = True
                 if self._bed_automations_enabled:
-                    self.hass.async_create_task(self._on_getting_in_bed())
+                    self._begin_getting_in_bed()
             elif new_count == 0 and old_count > 0:
                 self._is_in_bed = False
                 if self._bed_automations_enabled:
@@ -426,8 +449,8 @@ class Room:
         if coros:
             await asyncio.gather(*coros, return_exceptions=True)
 
-        # Wake/everyone-up checks (skip if occupant_count handles it)
-        if self.bed_persons and not self.has_occupant_count:
+        # Wake/everyone-up checks (occupant-count beds handle these from count deltas)
+        if self.bed_presence_drives_household:
             await self._manager.async_on_waking(self)
             await self._manager.async_on_everyone_up(self)
 
