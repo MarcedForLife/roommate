@@ -1,7 +1,8 @@
 [project]
 name = "roommate"
 version = "0.1.0"
-requires-python = ">=3.12"
+# Mirrors current homeassistant's floor so the lock resolves a single HA version.
+requires-python = ">=3.14.2"
 
 [dependency-groups]
 dev = [
@@ -9,11 +10,14 @@ dev = [
     "pytest-asyncio",
     "pytest-homeassistant-custom-component",
     "pytest-cov",
-    "ruff",
+    "ruff==0.16.0",
 ]
 
 [tool.ruff]
-target-version = "py312"
+# Kept below requires-python: that floor is for the dev harness (current HA),
+# while the integration itself runs on the Python of the oldest supported HA
+# (hacs.json declares 2025.12, which ships Python 3.13).
+target-version = "py313"
 line-length = 100
 
 [tool.ruff.lint]
