@@ -1207,6 +1207,39 @@ async def test_illuminance_threshold_zero_disables_gating(
     assert room.should_skip_for_illuminance() is False
 
 
+async def test_snapshot_restores_light_color_and_fan_preset(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """Quick-return snapshot captures and restores rgb color and fan preset."""
+    room = setup_integration.rooms["bedroom"]
+    hass.states.async_set(
+        "light.lamp_1", STATE_ON, {"color_mode": "rgb", "rgb_color": [255, 0, 0], "brightness": 200}
+    )
+    hass.states.async_set("light.lamp_2", "off")
+    hass.states.async_set("fan.bedroom_fan", STATE_ON, {"percentage": 30, "preset_mode": "sleep"})
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock):
+        await room._on_leaving_bed()
+
+    snap = room._pre_exit_snapshot
+    assert snap["lights"]["light.lamp_1"]["rgb_color"] == [255, 0, 0]
+    assert snap["lights"]["light.lamp_1"]["color_mode"] == "rgb"
+    assert snap["fans"]["fan.bedroom_fan"]["preset_mode"] == "sleep"
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_getting_in_bed()
+        light_on = [
+            c for c in mock.call_args_list if c.args[0] == "light" and c.args[1] == "turn_on"
+        ]
+        assert any(c.kwargs.get("rgb_color") == [255, 0, 0] for c in light_on)
+        fan_on = [c for c in mock.call_args_list if c.args[0] == "fan" and c.args[1] == "turn_on"]
+        assert fan_on and fan_on[0].kwargs.get("preset_mode") == "sleep"
+        assert "percentage" not in fan_on[0].kwargs  # the preset wins over the percentage
+
+    room.cancel_timers()
+
+
 async def test_leaving_bed_aborts_on_reentry(
     hass: HomeAssistant,
     setup_integration: RoommateManager,

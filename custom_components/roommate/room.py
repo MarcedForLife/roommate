@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections import deque
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import (
@@ -16,6 +17,7 @@ from homeassistant.core import (
     CALLBACK_TYPE,
     Context,
     HomeAssistant,
+    State,
     callback,
 )
 from homeassistant.helpers.event import async_call_later
@@ -567,29 +569,13 @@ class Room:
         if timeout <= 0:
             return
 
-        snapshot: dict[str, Any] = {"lights": {}, "fans": {}, "speakers": {}}
-
-        for light_id in self.light_entities:
-            state = self.hass.states.get(light_id)
-            if state:
-                snapshot["lights"][light_id] = {
-                    "state": state.state,
-                    "brightness": state.attributes.get("brightness"),
-                    "color_temp": state.attributes.get("color_temp"),
-                }
-
-        for fan_id in self.config[CONF_FANS]:
-            state = self.hass.states.get(fan_id)
-            if state:
-                snapshot["fans"][fan_id] = {
-                    "state": state.state,
-                    "percentage": state.attributes.get("percentage"),
-                }
-
-        for speaker_id in self.config[CONF_SPEAKERS]:
-            state = self.hass.states.get(speaker_id)
-            if state:
-                snapshot["speakers"][speaker_id] = {"state": state.state}
+        snapshot: dict[str, Any] = {
+            "lights": _snapshot_states(self.hass, self.light_entities, _capture_light_state),
+            "fans": _snapshot_states(self.hass, self.config[CONF_FANS], _capture_fan_state),
+            "speakers": _snapshot_states(
+                self.hass, self.config[CONF_SPEAKERS], _capture_speaker_state
+            ),
+        }
 
         if self.sleep_mode_id:
             state = self.hass.states.get(self.sleep_mode_id)
@@ -613,19 +599,22 @@ class Room:
 
         for light_id, attrs in snapshot.get("lights", {}).items():
             if attrs["state"] == STATE_ON:
-                data = {
-                    key: attrs[key]
-                    for key in ("brightness", "color_temp")
-                    if attrs.get(key) is not None
-                }
-                coros.append(self._call_service("light", "turn_on", entity_id=light_id, **data))
+                coros.append(
+                    self._call_service(
+                        "light", "turn_on", entity_id=light_id, **_light_restore_data(attrs)
+                    )
+                )
             else:
                 coros.append(self._call_service("light", "turn_off", entity_id=light_id))
 
         for fan_id, attrs in snapshot.get("fans", {}).items():
             if attrs["state"] == STATE_ON:
                 data = {}
-                if attrs.get("percentage") is not None:
+                # Prefer the preset: fans report a percentage alongside an active
+                # preset, and restoring the percentage would drop the preset.
+                if attrs.get("preset_mode") is not None:
+                    data["preset_mode"] = attrs["preset_mode"]
+                elif attrs.get("percentage") is not None:
                     data["percentage"] = attrs["percentage"]
                 coros.append(self._call_service("fan", "turn_on", entity_id=fan_id, **data))
 
@@ -785,3 +774,76 @@ def _get_numeric_state(hass: HomeAssistant, entity_id: str) -> float | None:
         except (ValueError, TypeError):
             pass
     return None
+
+
+# Light color attribute to snapshot for each color_mode, mapped to its light.turn_on
+# kwarg. color_temp_kelvin is preferred over the deprecated mireds color_temp.
+COLOR_MODE_ATTRS = {
+    "color_temp": "color_temp_kelvin",
+    "hs": "hs_color",
+    "rgb": "rgb_color",
+    "rgbw": "rgbw_color",
+    "rgbww": "rgbww_color",
+    "xy": "xy_color",
+}
+
+
+def _snapshot_states(
+    hass: HomeAssistant,
+    entity_ids: list[str],
+    capture: Callable[[State], dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Capture the restorable state of each available entity via the given extractor."""
+    captured: dict[str, dict[str, Any]] = {}
+    for entity_id in entity_ids:
+        state = hass.states.get(entity_id)
+        if state:
+            captured[entity_id] = capture(state)
+    return captured
+
+
+def _capture_fan_state(state: State) -> dict[str, Any]:
+    """Snapshot a fan's restorable attributes (speed percentage and preset)."""
+    return {
+        "state": state.state,
+        "percentage": state.attributes.get("percentage"),
+        "preset_mode": state.attributes.get("preset_mode"),
+    }
+
+
+def _capture_speaker_state(state: State) -> dict[str, Any]:
+    """Snapshot a media player's playback state."""
+    return {"state": state.state}
+
+
+def _capture_light_state(state: State) -> dict[str, Any]:
+    """Snapshot a light's restorable attributes: brightness, the color matching its
+    color_mode, and effect."""
+    attributes = state.attributes
+    color_mode = attributes.get("color_mode")
+    captured: dict[str, Any] = {
+        "state": state.state,
+        "brightness": attributes.get("brightness"),
+        "color_mode": color_mode,
+        "effect": attributes.get("effect"),
+    }
+    color_attr = COLOR_MODE_ATTRS.get(color_mode)
+    if color_attr is not None:
+        value = attributes.get(color_attr)
+        if value is not None:
+            captured[color_attr] = list(value) if isinstance(value, list | tuple) else value
+    return captured
+
+
+def _light_restore_data(attrs: dict[str, Any]) -> dict[str, Any]:
+    """Build light.turn_on kwargs from a captured light snapshot."""
+    data: dict[str, Any] = {}
+    if attrs.get("brightness") is not None:
+        data["brightness"] = attrs["brightness"]
+    color_attr = COLOR_MODE_ATTRS.get(attrs.get("color_mode"))
+    if color_attr is not None and attrs.get(color_attr) is not None:
+        data[color_attr] = attrs[color_attr]
+    effect = attrs.get("effect")
+    if effect and effect != "None":
+        data["effect"] = effect
+    return data
