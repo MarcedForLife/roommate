@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 import voluptuous as vol
 from homeassistant.core import HomeAssistant
@@ -83,6 +85,68 @@ async def test_setup_entry_empty(hass: HomeAssistant) -> None:
 
     manager = hass.data[DOMAIN][entry.entry_id]["manager"]
     assert len(manager.rooms) == 0
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_room_tuning_change_applies_in_place(hass: HomeAssistant, full_config: dict) -> None:
+    """A tuning-only edit updates the live room without reloading the entry."""
+    validated = CONFIG_SCHEMA(full_config)
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=validated[DOMAIN])
+    await _setup_entry(hass, entry)
+
+    manager_before = hass.data[DOMAIN][entry.entry_id]["manager"]
+    room = manager_before.rooms["bedroom"]
+    assert room.config["dim_brightness"] == 5
+
+    new_options = copy.deepcopy(dict(entry.options))
+    new_options["rooms"]["bedroom"]["dim_brightness"] = 42
+    hass.config_entries.async_update_entry(entry, options=new_options)
+    await hass.async_block_till_done()
+
+    assert hass.data[DOMAIN][entry.entry_id]["manager"] is manager_before  # no reload
+    assert room.config["dim_brightness"] == 42  # applied in place
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_global_tuning_change_applies_in_place(
+    hass: HomeAssistant, full_config: dict
+) -> None:
+    """A global tuning edit updates the manager in place without reloading."""
+    validated = CONFIG_SCHEMA(full_config)
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=validated[DOMAIN])
+    await _setup_entry(hass, entry)
+
+    manager_before = hass.data[DOMAIN][entry.entry_id]["manager"]
+
+    new_options = copy.deepcopy(dict(entry.options))
+    new_options["illuminance_threshold"] = 1234
+    hass.config_entries.async_update_entry(entry, options=new_options)
+    await hass.async_block_till_done()
+
+    assert hass.data[DOMAIN][entry.entry_id]["manager"] is manager_before
+    assert manager_before.illuminance_threshold == 1234
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_structural_change_triggers_reload(hass: HomeAssistant, full_config: dict) -> None:
+    """A structural edit (changed lights) reloads the entry with a fresh manager."""
+    validated = CONFIG_SCHEMA(full_config)
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=validated[DOMAIN])
+    await _setup_entry(hass, entry)
+
+    manager_before = hass.data[DOMAIN][entry.entry_id]["manager"]
+
+    new_options = copy.deepcopy(dict(entry.options))
+    new_options["rooms"]["bedroom"]["lights"] = ["light.new_lamp"]
+    hass.config_entries.async_update_entry(entry, options=new_options)
+    await hass.async_block_till_done()
+
+    manager_after = hass.data[DOMAIN][entry.entry_id]["manager"]
+    assert manager_after is not manager_before  # reloaded
+    assert manager_after.rooms["bedroom"].light_entities == ["light.new_lamp"]
 
     assert await hass.config_entries.async_unload(entry.entry_id)
 
