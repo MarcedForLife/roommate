@@ -156,11 +156,20 @@ class RoommateManager:
         if new_state is None or new_state.state in INVALID_STATES:
             return
 
-        # Entity just became available (startup or recovery from unavailable).
-        # Re-read all sensors for affected rooms since there's no valid previous
-        # state to compare against.
+        # Entity just became available. Two cases share this branch:
+        #  - First appearance at startup (old_state is None): re-read state only,
+        #    taking no actions, since this is the initial condition.
+        #  - Recovery from unavailable/unknown (old_state had a real value): a real
+        #    transition may have happened during the gap, so dispatch its side effects
+        #    for the recovered roles.
         if old_state is None or old_state.state in INVALID_STATES:
-            for room, _role in self._entity_map.get(event.data["entity_id"], []):
+            room_roles: dict[Room, set[str]] = {}
+            for room, role in self._entity_map.get(event.data["entity_id"], []):
+                room_roles.setdefault(room, set()).add(role)
+            for room, roles in room_roles.items():
+                if old_state is not None:
+                    room.resync(roles)
+                    continue
                 room.initialize_state()
                 if room.presence_entity:
                     room.presence_entity.async_write_ha_state()

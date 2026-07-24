@@ -885,6 +885,137 @@ async def test_room_light_call_ignored_by_room_sharing_the_light(
     assert not hall.presence_lighting_enabled  # override preserved
 
 
+async def test_recovery_runs_lost_bed_exit(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """A bed exit that happens while the sensor is unavailable still runs on recovery."""
+    room = setup_integration.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("fan", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    await hass.async_block_till_done()
+    assert room.is_in_bed
+    hass.states.async_set("fan.bedroom_fan", STATE_ON)
+
+    # Sensor drops out, then recovers reporting the person already left.
+    hass.states.async_set("binary_sensor.bed_occupancy", "unavailable")
+    await hass.async_block_till_done()
+    hass.states.async_set("binary_sensor.bed_occupancy", "off")
+    await hass.async_block_till_done()
+
+    assert not room.is_in_bed
+    assert any(c.domain == "fan" for c in calls)  # lost leaving-bed actions ran
+
+
+async def test_recovery_runs_lost_presence_off(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """A presence-ended that happens during an unavailable gap turns lights off on recovery."""
+    room = setup_integration.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("binary_sensor.bedroom_presence", STATE_ON)
+    await hass.async_block_till_done()
+    assert room.is_present
+
+    hass.states.async_set("binary_sensor.bedroom_presence", "unavailable")
+    await hass.async_block_till_done()
+    hass.states.async_set("binary_sensor.bedroom_presence", "off")
+    await hass.async_block_till_done()
+
+    assert not room.is_present
+    assert any(c.domain == "light" for c in calls)  # lost presence-off ran
+
+
+async def test_first_appearance_takes_no_action(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """First sensor appearance at startup updates state but must not actuate."""
+    room = setup_integration.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_on", lambda call: calls.append(call))
+    hass.services.async_register("fan", "turn_off", lambda call: calls.append(call))
+
+    # old_state is None -> passive re-read, no side effects.
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    await hass.async_block_till_done()
+
+    assert room.is_in_bed
+    assert room.is_present
+    assert len(calls) == 0
+
+
+async def test_light_recovery_does_not_resync_bed(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """A recovering light must not misread a still-unavailable bed sensor as a bed exit."""
+    room = setup_integration.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("fan", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("sensor.bed_occupants", "0")  # count sensor sees nobody
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    hass.states.async_set("light.lamp_1", STATE_ON)
+    await hass.async_block_till_done()
+    assert room.is_in_bed
+
+    hass.states.async_set("binary_sensor.bed_occupancy", "unavailable")
+    hass.states.async_set("light.lamp_1", "unavailable")
+    await hass.async_block_till_done()
+
+    hass.states.async_set("light.lamp_1", "off")  # light recovers, bed still unavailable
+    await hass.async_block_till_done()
+
+    assert room.is_in_bed  # no phantom bed exit
+    assert len(calls) == 0
+
+
+async def test_occupant_recovery_dispatches_household(hass: HomeAssistant, make_manager) -> None:
+    """A last-person-up transition hidden by an unavailable gap still ends sleep."""
+    config = {
+        DOMAIN: {
+            "sleep_modes": ["switch.house_sleep_mode"],
+            "rooms": {
+                "bedroom": {
+                    "sensors": {
+                        "presence": "binary_sensor.bedroom_presence",
+                        "bed": {"occupants": "sensor.bed_count", "persons": ["person.alice"]},
+                    },
+                    "lights": ["light.bedroom_lamp"],
+                },
+            },
+        },
+    }
+    manager = await make_manager(config)
+    room = manager.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("switch", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("sensor.bed_count", "1")
+    await hass.async_block_till_done()
+    assert room.is_in_bed
+
+    hass.states.async_set("switch.house_sleep_mode", STATE_ON)
+    hass.states.async_set("sensor.bed_count", "unavailable")
+    await hass.async_block_till_done()
+    hass.states.async_set("sensor.bed_count", "0")
+    await hass.async_block_till_done()
+
+    assert not room.is_in_bed
+    assert any(c.domain == "switch" for c in calls)  # everyone-up ran on recovery
+
+
 async def test_presence_off_rechecks_live_presence(
     hass: HomeAssistant,
     setup_integration: RoommateManager,
