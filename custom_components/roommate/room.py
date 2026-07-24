@@ -238,6 +238,51 @@ class Room:
         self._update_presence_state()
         self._is_in_bed = self._is_bed_occupied()
 
+    def resync(self, roles: set[str]) -> None:
+        """Re-read sensors after an unavailable/unknown gap and run the handlers for
+        any real transition that happened while the entity was unavailable.
+
+        Unlike initialize_state, this dispatches side effects for state deltas so the
+        room converges to correct outputs (lights/fans/speakers/sleep) instead of only
+        correct cached state. Only state derived from the recovered roles is touched,
+        so e.g. a light recovering can't misread a still-unavailable bed sensor as a
+        bed exit. A flap with no net change produces no actions.
+        """
+        if roles & {"bed", "occupant"}:
+            self._resync_bed()
+        if roles - {"light"}:
+            # Recompute combined presence and dispatch its own delta (also writes the
+            # presence and diagnostic entities).
+            self.handle_presence_change()
+
+    def _resync_bed(self) -> None:
+        """Reconcile cached bed state, dispatching entry/exit side effects on a delta.
+
+        Partial count changes hidden by the gap (e.g. 2 -> unavailable -> 1) can't be
+        recovered; only the occupied/empty transition is.
+        """
+        reading = self._bed_occupancy_reading()
+        if reading is None or reading == self._is_in_bed:
+            return
+        self._is_in_bed = reading
+        if not self._bed_automations_enabled:
+            return
+
+        if reading:
+            self._begin_getting_in_bed()
+        else:
+            # The exit happened at some point during the gap, so skip the debounce.
+            self.hass.async_create_task(self._on_leaving_bed())
+
+        # Occupant-count rooms normally drive the household from count deltas in
+        # handle_occupant_change, which never saw the gap; dispatch from this delta.
+        if self.bed_persons and self.has_occupant_count:
+            if reading:
+                self.hass.async_create_task(self._manager.async_on_sleeping(self))
+            else:
+                self.hass.async_create_task(self._manager.async_on_waking(self))
+                self.hass.async_create_task(self._manager.async_on_everyone_up(self))
+
     def _update_presence_state(self) -> None:
         self._is_present = (
             _entity_is_on(self.hass, self.presence_sensor_id) or self._is_bed_occupied()
