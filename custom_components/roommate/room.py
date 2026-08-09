@@ -246,6 +246,13 @@ class Room:
         """Set initial state from current sensor values without taking actions."""
         self._update_presence_state()
         self._is_in_bed = self._is_bed_occupied()
+        # Reconcile the vacancy countdown: an already-empty room starts it at setup
+        # (so a pending reset isn't lost to a restart), and a sensor first appearing
+        # as detected clears the one armed before it appeared.
+        if self._is_present:
+            self._cancel_presence_reset_timer()
+        else:
+            self._start_presence_reset_timer()
 
     def resync(self, roles: set[str]) -> None:
         """Re-read sensors after an unavailable/unknown gap and run the handlers for
@@ -298,13 +305,12 @@ class Room:
         )
 
     def set_presence_lighting_enabled(self, enabled: bool) -> None:
-        """Set the override state, managing the timed reset that re-enables presence
-        automations (and optionally resets the room) after the room has been empty
-        for the configured reset timeout."""
+        """Set the override state. Disabling while the room is empty (re)starts the
+        reset countdown; the countdown is otherwise vacancy-driven and survives
+        re-enabling, so a pending room reset still cleans the room up (see
+        _on_presence_reset)."""
         self._presence_lighting_enabled = enabled
-        if enabled:
-            self._cancel_presence_reset_timer()
-        elif not self._is_present:
+        if not enabled and not self._is_present:
             self._start_presence_reset_timer()
 
     def set_illuminance_gate_enabled(self, enabled: bool) -> None:
@@ -344,8 +350,7 @@ class Room:
             self.hass.async_create_task(self._on_presence_detected())
         elif not self._is_present and was_present:
             self._start_presence_off_timer()
-            if not self._presence_lighting_enabled:
-                self._start_presence_reset_timer()
+            self._start_presence_reset_timer()
 
         if self.presence_entity:
             self.presence_entity.async_write_ha_state()
@@ -746,27 +751,32 @@ class Room:
         self.hass.async_create_task(self._on_presence_reset())
 
     async def _on_presence_reset(self) -> None:
-        """Lift a stale override once the room has been undetected for the reset
-        timeout. Always re-enables presence automations; when room_reset_timeout is
-        the active countdown, also converge the room to its empty baseline (lights
-        and fans off, speakers stopped, room sleep mode off), since anything left
-        running while the override was active (sleep sounds, forced-on lights) would
-        otherwise stay on until the next manual intervention.
+        """Runs after the room has been continuously undetected for the reset timeout.
+
+        presence_reset_timeout mode: lift a stale override (re-enable presence
+        automations); a no-op when no override is active.
+        room_reset_timeout mode: additionally converge the room to its empty
+        baseline (lights and fans off, speakers stopped, room sleep mode off),
+        override or not, so nothing left running in an empty room (sleep sounds,
+        forced-on lights) stays on until the next manual intervention.
         """
-        if self._is_present or self._presence_lighting_enabled:
+        if self._is_present:
             return
         full_reset = self.config[CONF_ROOM_RESET_TIMEOUT] > 0
+        if not full_reset and self._presence_lighting_enabled:
+            return
         _LOGGER.debug(
             "Room %s: no presence for %d min, %s",
             self.name,
             self._reset_timeout_minutes(),
             "resetting room" if full_reset else "re-enabling presence automations",
         )
-        self.set_presence_lighting_enabled(True)
-        if self.presence_lighting_switch:
-            self.presence_lighting_switch.async_write_ha_state()
-        if self.diagnostic_entity:
-            self.diagnostic_entity.async_write_ha_state()
+        if not self._presence_lighting_enabled:
+            self.set_presence_lighting_enabled(True)
+            if self.presence_lighting_switch:
+                self.presence_lighting_switch.async_write_ha_state()
+            if self.diagnostic_entity:
+                self.diagnostic_entity.async_write_ha_state()
 
         if not full_reset:
             return
