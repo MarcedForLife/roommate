@@ -34,6 +34,7 @@ async def async_get_config_entry_diagnostics(
             "has_bed_sensor": room.has_bed_sensor,
             "bed_exit_timer_active": room.bed_exit_timer_active,
             "presence_off_timer_active": room.presence_off_timer_active,
+            "presence_reset_timer_active": room.presence_reset_timer_active,
             "snapshot_active": room.snapshot_active,
         }
 
