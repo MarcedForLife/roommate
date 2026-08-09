@@ -37,6 +37,7 @@ from .const import (
     CONF_PERSONS,
     CONF_PRESENCE,
     CONF_PRESENCE_OFF_DELAY,
+    CONF_PRESENCE_RESET_TIMEOUT,
     CONF_RECENTLY_ON_THRESHOLD,
     CONF_SENSORS,
     CONF_SLEEP_MODE,
@@ -84,6 +85,7 @@ class Room:
 
         self._bed_exit_timer: CALLBACK_TYPE | None = None
         self._presence_off_timer: CALLBACK_TYPE | None = None
+        self._presence_reset_timer: CALLBACK_TYPE | None = None
         self._snapshot_timer: CALLBACK_TYPE | None = None
         self._pre_exit_snapshot: dict[str, Any] | None = None
         self._our_context_ids: set[str] = set()
@@ -195,6 +197,10 @@ class Room:
         return self._presence_off_timer is not None
 
     @property
+    def presence_reset_timer_active(self) -> bool:
+        return self._presence_reset_timer is not None
+
+    @property
     def snapshot_active(self) -> bool:
         return self._pre_exit_snapshot is not None
 
@@ -291,7 +297,13 @@ class Room:
         )
 
     def set_presence_lighting_enabled(self, enabled: bool) -> None:
+        """Set the override state, managing the timed reset that re-enables presence
+        automations after the room has been empty for presence_reset_timeout."""
         self._presence_lighting_enabled = enabled
+        if enabled:
+            self._cancel_presence_reset_timer()
+        elif not self._is_present:
+            self._start_presence_reset_timer()
 
     def set_illuminance_gate_enabled(self, enabled: bool) -> None:
         self._illuminance_gate_enabled = enabled
@@ -326,9 +338,12 @@ class Room:
 
         if self._is_present and not was_present:
             self._cancel_presence_off_timer()
+            self._cancel_presence_reset_timer()
             self.hass.async_create_task(self._on_presence_detected())
         elif not self._is_present and was_present:
             self._start_presence_off_timer()
+            if not self._presence_lighting_enabled:
+                self._start_presence_reset_timer()
 
         if self.presence_entity:
             self.presence_entity.async_write_ha_state()
@@ -399,10 +414,10 @@ class Room:
         turned_on = old != STATE_ON and new == STATE_ON
 
         if turned_off and self._is_present:
-            self._presence_lighting_enabled = False
+            self.set_presence_lighting_enabled(False)
             _LOGGER.debug("Room %s: manual light off, disabling presence lighting", self.name)
         elif turned_on and not self._presence_lighting_enabled:
-            self._presence_lighting_enabled = True
+            self.set_presence_lighting_enabled(True)
             _LOGGER.debug("Room %s: manual light on, re-enabling presence lighting", self.name)
         else:
             return
@@ -507,7 +522,7 @@ class Room:
 
         coros: list = []
 
-        self._presence_lighting_enabled = True
+        self.set_presence_lighting_enabled(True)
         if self.presence_lighting_switch:
             self.presence_lighting_switch.async_write_ha_state()
 
@@ -707,9 +722,39 @@ class Room:
             self._presence_off_timer()
             self._presence_off_timer = None
 
+    def _start_presence_reset_timer(self) -> None:
+        self._cancel_presence_reset_timer()
+        timeout_minutes = self.config[CONF_PRESENCE_RESET_TIMEOUT]
+        if timeout_minutes > 0:
+            self._presence_reset_timer = async_call_later(
+                self.hass, timeout_minutes * 60, self._on_presence_reset_timer
+            )
+
+    @callback
+    def _on_presence_reset_timer(self, _now: Any) -> None:
+        self._presence_reset_timer = None
+        if self._is_present or self._presence_lighting_enabled:
+            return
+        _LOGGER.debug(
+            "Room %s: no presence for %d min, re-enabling presence automations",
+            self.name,
+            self.config[CONF_PRESENCE_RESET_TIMEOUT],
+        )
+        self.set_presence_lighting_enabled(True)
+        if self.presence_lighting_switch:
+            self.presence_lighting_switch.async_write_ha_state()
+        if self.diagnostic_entity:
+            self.diagnostic_entity.async_write_ha_state()
+
+    def _cancel_presence_reset_timer(self) -> None:
+        if self._presence_reset_timer:
+            self._presence_reset_timer()
+            self._presence_reset_timer = None
+
     def cancel_timers(self) -> None:
         self._cancel_bed_exit_timer()
         self._cancel_presence_off_timer()
+        self._cancel_presence_reset_timer()
         self._clear_snapshot()
 
     def register_context(self, context_id: str) -> None:
