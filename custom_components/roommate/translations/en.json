@@ -53,6 +53,7 @@
           "bed_return_timeout": "Quick-return timeout",
           "presence_off_delay": "Presence off delay",
           "presence_reset_timeout": "Presence reset timeout",
+          "room_reset_timeout": "Room reset timeout",
           "wake_transition": "Wake transition",
           "illuminance_threshold": "Illuminance threshold"
         },
@@ -65,7 +66,8 @@
           "bed_exit_delay": "Debounce delay before processing bed exit",
           "bed_return_timeout": "Window to restore previous room state on quick bed return",
           "presence_off_delay": "Debounce delay before processing presence off",
-          "presence_reset_timeout": "Re-enable presence automations and turn off lights, fans, and speakers after the room has been undetected this long. 0 = disabled.",
+          "presence_reset_timeout": "Re-enable presence automations after the room has been undetected this long. 0 = disabled.",
+          "room_reset_timeout": "Fully reset the room after it has been undetected this long: re-enable presence automations and turn off lights, fans, and speakers. Supersedes the presence reset timeout. 0 = disabled.",
           "wake_transition": "Light fade duration when getting out of bed",
           "illuminance_threshold": "Lux level above which presence and wake lights are skipped. 0 = use global threshold."
         }
@@ -164,6 +166,7 @@
           "bed_return_timeout": "Quick-return timeout",
           "presence_off_delay": "Presence off delay",
           "presence_reset_timeout": "Presence reset timeout",
+          "room_reset_timeout": "Room reset timeout",
           "wake_transition": "Wake transition",
           "illuminance_threshold": "Illuminance threshold"
         },
@@ -176,7 +179,8 @@
           "bed_exit_delay": "Debounce delay before processing bed exit",
           "bed_return_timeout": "Window to restore previous room state on quick bed return",
           "presence_off_delay": "Debounce delay before processing presence off",
-          "presence_reset_timeout": "Re-enable presence automations and turn off lights, fans, and speakers after the room has been undetected this long. 0 = disabled.",
+          "presence_reset_timeout": "Re-enable presence automations after the room has been undetected this long. 0 = disabled.",
+          "room_reset_timeout": "Fully reset the room after it has been undetected this long: re-enable presence automations and turn off lights, fans, and speakers. Supersedes the presence reset timeout. 0 = disabled.",
           "wake_transition": "Light fade duration when getting out of bed",
           "illuminance_threshold": "Lux level above which presence and wake lights are skipped. 0 = use global threshold."
         }

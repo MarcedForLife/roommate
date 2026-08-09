@@ -39,6 +39,7 @@ from .const import (
     CONF_PRESENCE_OFF_DELAY,
     CONF_PRESENCE_RESET_TIMEOUT,
     CONF_RECENTLY_ON_THRESHOLD,
+    CONF_ROOM_RESET_TIMEOUT,
     CONF_SENSORS,
     CONF_SLEEP_MODE,
     CONF_SPEAKERS,
@@ -298,7 +299,8 @@ class Room:
 
     def set_presence_lighting_enabled(self, enabled: bool) -> None:
         """Set the override state, managing the timed reset that re-enables presence
-        automations after the room has been empty for presence_reset_timeout."""
+        automations (and optionally resets the room) after the room has been empty
+        for the configured reset timeout."""
         self._presence_lighting_enabled = enabled
         if enabled:
             self._cancel_presence_reset_timer()
@@ -722,9 +724,17 @@ class Room:
             self._presence_off_timer()
             self._presence_off_timer = None
 
+    def _reset_timeout_minutes(self) -> int:
+        """Effective reset countdown: the full room reset supersedes the
+        automations-only presence reset when both are configured."""
+        room_timeout = self.config[CONF_ROOM_RESET_TIMEOUT]
+        if room_timeout > 0:
+            return room_timeout
+        return self.config[CONF_PRESENCE_RESET_TIMEOUT]
+
     def _start_presence_reset_timer(self) -> None:
         self._cancel_presence_reset_timer()
-        timeout_minutes = self.config[CONF_PRESENCE_RESET_TIMEOUT]
+        timeout_minutes = self._reset_timeout_minutes()
         if timeout_minutes > 0:
             self._presence_reset_timer = async_call_later(
                 self.hass, timeout_minutes * 60, self._on_presence_reset_timer
@@ -736,23 +746,30 @@ class Room:
         self.hass.async_create_task(self._on_presence_reset())
 
     async def _on_presence_reset(self) -> None:
-        """Re-enable presence automations and converge the room to its empty baseline:
-        lights and fans off, speakers stopped, room sleep mode off. Anything left
+        """Lift a stale override once the room has been undetected for the reset
+        timeout. Always re-enables presence automations; when room_reset_timeout is
+        the active countdown, also converge the room to its empty baseline (lights
+        and fans off, speakers stopped, room sleep mode off), since anything left
         running while the override was active (sleep sounds, forced-on lights) would
         otherwise stay on until the next manual intervention.
         """
         if self._is_present or self._presence_lighting_enabled:
             return
+        full_reset = self.config[CONF_ROOM_RESET_TIMEOUT] > 0
         _LOGGER.debug(
-            "Room %s: no presence for %d min, resetting room",
+            "Room %s: no presence for %d min, %s",
             self.name,
-            self.config[CONF_PRESENCE_RESET_TIMEOUT],
+            self._reset_timeout_minutes(),
+            "resetting room" if full_reset else "re-enabling presence automations",
         )
         self.set_presence_lighting_enabled(True)
         if self.presence_lighting_switch:
             self.presence_lighting_switch.async_write_ha_state()
         if self.diagnostic_entity:
             self.diagnostic_entity.async_write_ha_state()
+
+        if not full_reset:
+            return
 
         coros: list = []
         if self.is_lights_on():

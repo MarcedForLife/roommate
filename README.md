@@ -17,7 +17,7 @@ A Home Assistant integration that automates room behaviour based on presence and
 
 - **Presence lighting** with configurable transitions
 - **Bed occupancy** handling (dim on entry, restore on exit, wake transition)
-- **Manual override detection** that suppresses presence lighting when you manually turn off a light, with an optional timed reset that re-enables automations and turns off lights, fans, and media once the room has been empty for a while
+- **Manual override detection** that suppresses presence lighting when you manually turn off a light, with an optional timed reset that re-enables automations (and can also turn off lights, fans, and media) once the room has been empty for a while
 - **Household sleep/wake** coordination across multiple rooms
 - **Quick return snapshot** that restores room state (lights, fans, paused media) if you get back in bed within a configurable window
 - **Adaptive lighting** integration (restore auto-brightness on bed exit)
@@ -113,7 +113,8 @@ roommate:
       bed_exit_delay: 10             # Seconds, debounce before triggering bed exit
       bed_return_timeout: 180        # Seconds, restore room state on quick return
       presence_off_delay: 0          # Seconds, debounce before lights off
-      presence_reset_timeout: 0      # Minutes undetected before the room resets (automations re-enable, lights/media off); 0 disables
+      presence_reset_timeout: 0      # Minutes undetected before presence automations re-enable; 0 disables
+      room_reset_timeout: 0          # Minutes undetected before a full room reset (automations, lights, media); supersedes presence_reset_timeout; 0 disables
       illuminance_threshold: 0       # Lux override; 0 means use global threshold
 ```
 
