@@ -196,7 +196,14 @@ class RoommateManager:
         if not triggering_room.bed_persons:
             return
 
-        tracked_rooms = [room for room in self._rooms.values() if room.bed_persons]
+        # A room with bed automations disabled is quarantined: its bed sensor is
+        # treated as not configured, so it neither satisfies nor blocks the
+        # everyone-in-bed check.
+        tracked_rooms = [
+            room
+            for room in self._rooms.values()
+            if room.bed_persons and room.bed_automations_enabled
+        ]
         if not tracked_rooms:
             return
 
