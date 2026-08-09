@@ -17,7 +17,7 @@ A Home Assistant integration that automates room behaviour based on presence and
 
 - **Presence lighting** with configurable transitions
 - **Bed occupancy** handling (dim on entry, restore on exit, wake transition)
-- **Manual override detection** that suppresses presence lighting when you manually turn off a light
+- **Manual override detection** that suppresses presence lighting when you manually turn off a light, with an optional timed reset once the room has been empty for a while
 - **Household sleep/wake** coordination across multiple rooms
 - **Quick return snapshot** that restores room state (lights, fans, paused media) if you get back in bed within a configurable window
 - **Adaptive lighting** integration (restore auto-brightness on bed exit)
@@ -41,14 +41,15 @@ stateDiagram-v2
 
     Present --> Overridden: Manual light off
     Overridden --> Present: Manual light on\nor bed empty
+    Overridden --> Empty: Undetected for\nreset timeout
 ```
 
-| State          | Room behaviour                                                  |
-| -------------- | --------------------------------------------------------------- |
-| **Empty**      | Lights off                                                      |
-| **Present**    | Lights on (adaptive)                                            |
-| **In Bed**     | Lights dimmed or off, fans/speakers controlled                  |
-| **Overridden** | Presence lighting suppressed until manual light-on or bed empty |
+| State          | Room behaviour                                                                  |
+| -------------- | ------------------------------------------------------------------------------- |
+| **Empty**      | Lights off                                                                      |
+| **Present**    | Lights on (adaptive)                                                            |
+| **In Bed**     | Lights dimmed or off, fans/speakers controlled                                  |
+| **Overridden** | Presence lighting suppressed until manual light-on, bed empty, or reset timeout |
 
 The `room_state` diagnostic sensor reports `empty`, `present`, or `in_bed`. Overridden is not a separate value, it is surfaced as the sensor's `presence_lighting` attribute (`active` or `overridden`).
 
@@ -112,6 +113,7 @@ roommate:
       bed_exit_delay: 10             # Seconds, debounce before triggering bed exit
       bed_return_timeout: 180        # Seconds, restore room state on quick return
       presence_off_delay: 0          # Seconds, debounce before lights off
+      presence_reset_timeout: 0      # Minutes undetected before presence automations re-enable; 0 disables
       illuminance_threshold: 0       # Lux override; 0 means use global threshold
 ```
 
@@ -130,24 +132,24 @@ rooms:
 
 Per room (using "bedroom" as example):
 
-| Entity                                            | Created when                          | Purpose                                 |
-| ------------------------------------------------- | ------------------------------------- | --------------------------------------- |
-| `binary_sensor.roommate_bedroom_presence`         | Always                                | Combined presence (motion OR bed)       |
-| `sensor.roommate_bedroom_room_state`              | Always                                | Diagnostic state (empty/present/in_bed) |
-| `switch.roommate_bedroom_presence_automations`    | Always                                | Toggle presence-based lighting          |
-| `switch.roommate_bedroom_bed_automations`         | Bed sensor configured                 | Toggle bed-related automations          |
-| `switch.roommate_bedroom_illuminance_gating`      | Illuminance sensor available          | Off bypasses the lux threshold          |
-| `button.roommate_bedroom_restore_auto_brightness` | Adaptive lighting configured          | Restore auto-brightness                 |
-| `number.roommate_bedroom_*`                       | Per tuning param (conditional)        | Adjust timing and brightness values     |
+| Entity                                            | Created when                   | Purpose                                 |
+| ------------------------------------------------- | ------------------------------ | --------------------------------------- |
+| `binary_sensor.roommate_bedroom_presence`         | Always                         | Combined presence (motion OR bed)       |
+| `sensor.roommate_bedroom_room_state`              | Always                         | Diagnostic state (empty/present/in_bed) |
+| `switch.roommate_bedroom_presence_automations`    | Always                         | Toggle presence-based lighting          |
+| `switch.roommate_bedroom_bed_automations`         | Bed sensor configured          | Toggle bed-related automations          |
+| `switch.roommate_bedroom_illuminance_gating`      | Illuminance sensor available   | Off bypasses the lux threshold          |
+| `button.roommate_bedroom_restore_auto_brightness` | Adaptive lighting configured   | Restore auto-brightness                 |
+| `number.roommate_bedroom_*`                       | Per tuning param (conditional) | Adjust timing and brightness values     |
 
 Bed-related tuning entities only appear when a bed sensor is configured. The per-room `illuminance_threshold` number only appears when an illuminance sensor is available, and `0` means "use the global threshold".
 
 Global:
 
-| Entity                                   | Created when                  | Purpose                                          |
-| ---------------------------------------- | ----------------------------- | ------------------------------------------------ |
-| `switch.roommate_guest_mode`             | Always                        | Suppress sleep light activation                  |
-| `number.roommate_sleep_light_transition` | Sleep lights configured       | Sleep light fade duration                        |
+| Entity                                   | Created when                  | Purpose                                                             |
+| ---------------------------------------- | ----------------------------- | ------------------------------------------------------------------- |
+| `switch.roommate_guest_mode`             | Always                        | Suppress sleep light activation                                     |
+| `number.roommate_sleep_light_transition` | Sleep lights configured       | Sleep light fade duration                                           |
 | `number.roommate_illuminance_threshold`  | Illuminance sensor configured | Lux threshold for sleep lights (per-room can override room actions) |
 
 All entities are grouped under per-room "Roommate {Room}" devices or the global "Roommate" hub device.
