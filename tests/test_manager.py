@@ -1720,3 +1720,67 @@ async def test_room_reset_supersedes_presence_reset(hass: HomeAssistant, make_ma
     await hass.async_block_till_done()
     assert room.presence_lighting_enabled
     assert any(call.service == "media_stop" for call in calls)
+
+
+async def test_room_reset_fires_without_override(hass: HomeAssistant, make_manager) -> None:
+    """The room reset is vacancy-driven: it cleans up even when automations were
+    never disabled."""
+    manager = await make_manager(_reset_full_room_config(room_reset_timeout=60))
+    room = manager.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("media_player", "media_stop", lambda call: calls.append(call))
+
+    hass.states.async_set("media_player.bedroom_speaker", "playing")
+    hass.states.async_set("binary_sensor.bedroom_presence", STATE_ON)
+    room.handle_presence_change()
+    assert room.presence_lighting_enabled
+
+    hass.states.async_set("binary_sensor.bedroom_presence", "off")
+    room.handle_presence_change()
+    assert room.presence_reset_timer_active
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=60, seconds=1))
+    await hass.async_block_till_done()
+
+    assert room.presence_lighting_enabled
+    assert any(call.service == "media_stop" for call in calls)
+
+
+async def test_room_reset_survives_manual_reenable(hass: HomeAssistant, make_manager) -> None:
+    """Re-enabling automations mid-countdown does not cancel a pending room reset."""
+    manager = await make_manager(_reset_full_room_config(room_reset_timeout=60))
+    room = manager.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("media_player", "media_stop", lambda call: calls.append(call))
+    hass.states.async_set("media_player.bedroom_speaker", "playing")
+
+    hass.states.async_set("binary_sensor.bedroom_presence", STATE_ON)
+    room.handle_presence_change()
+    room.set_presence_lighting_enabled(False)
+    hass.states.async_set("binary_sensor.bedroom_presence", "off")
+    room.handle_presence_change()
+
+    room.set_presence_lighting_enabled(True)
+    assert room.presence_reset_timer_active
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=60, seconds=1))
+    await hass.async_block_till_done()
+    assert any(call.service == "media_stop" for call in calls)
+
+
+async def test_room_reset_armed_at_startup_when_empty(hass: HomeAssistant, make_manager) -> None:
+    """An already-empty room starts its vacancy countdown at setup, so a restart
+    does not lose a pending reset."""
+    manager = await make_manager(_reset_full_room_config(room_reset_timeout=60))
+    room = manager.rooms["bedroom"]
+    assert room.presence_reset_timer_active
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("media_player", "media_stop", lambda call: calls.append(call))
+    hass.states.async_set("media_player.bedroom_speaker", "playing")
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=60, seconds=1))
+    await hass.async_block_till_done()
+    assert any(call.service == "media_stop" for call in calls)
