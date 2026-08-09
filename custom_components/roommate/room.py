@@ -159,7 +159,9 @@ class Room:
 
     @property
     def is_in_bed(self) -> bool:
-        return self._is_in_bed
+        """Effective bed state: False while bed automations are disabled. The raw
+        sensor reading keeps being tracked so re-enabling picks up where it left off."""
+        return self._is_in_bed and self._bed_automations_enabled
 
     @property
     def presence_lighting_enabled(self) -> bool:
@@ -232,6 +234,10 @@ class Room:
         return self._is_in_bed if reading is None else reading
 
     def get_occupant_count(self) -> int:
+        """Effective occupant count; reads 0 while bed automations are disabled so a
+        quarantined sensor can't satisfy or block household sleep checks."""
+        if not self._bed_automations_enabled:
+            return 0
         occ_id = self.occupant_count_id
         if occ_id:
             count = _get_numeric_state(self.hass, occ_id)
@@ -300,8 +306,10 @@ class Room:
                 self.hass.async_create_task(self._manager.async_on_everyone_up(self))
 
     def _update_presence_state(self) -> None:
-        self._is_present = (
-            _entity_is_on(self.hass, self.presence_sensor_id) or self._is_bed_occupied()
+        # The bed contributes to combined presence only while bed automations are
+        # enabled; a disabled (quarantined) bed sensor must not hold or flip presence.
+        self._is_present = _entity_is_on(self.hass, self.presence_sensor_id) or (
+            self._bed_automations_enabled and self._is_bed_occupied()
         )
 
     def set_presence_lighting_enabled(self, enabled: bool) -> None:
@@ -334,10 +342,16 @@ class Room:
         return value >= threshold
 
     def set_bed_automations_enabled(self, enabled: bool) -> None:
+        """Set bed participation. Disabled means the room behaves as if no bed sensor
+        were configured: readings are excluded from combined presence, the occupant
+        count reads 0, and the room drops out of household sleep tracking."""
         self._bed_automations_enabled = enabled
         if not enabled:
             # Don't let a debounce started while enabled fire after the user disabled it.
             self._cancel_bed_exit_timer()
+        # Combined presence includes the bed only while enabled; recompute and
+        # dispatch the delta so lights and timers follow the toggle immediately.
+        self.handle_presence_change()
 
     @callback
     def handle_presence_change(self) -> None:
@@ -437,9 +451,11 @@ class Room:
     async def _on_presence_detected(self) -> None:
         if not self._presence_lighting_enabled:
             return
-        if self._is_in_bed:
+        if self.is_in_bed:
             # Presence flipped on via the bed union (or a recovery) while in bed; the
-            # bed logic owns the lights, don't blast them to full brightness.
+            # bed logic owns the lights, don't blast them to full brightness. A
+            # quarantined bed reading must not suppress the lights, hence the
+            # effective property rather than the raw cache.
             return
         if self.should_skip_for_illuminance():
             _LOGGER.debug("Room %s: presence detected but room is bright enough", self.name)
