@@ -1490,3 +1490,94 @@ async def test_service_failure_does_not_propagate(hass: HomeAssistant, make_mana
     # Must not raise despite the failing sleep-mode service call.
     await manager.async_on_everyone_up(manager.rooms["alice_room"])
     await hass.async_block_till_done()
+
+
+def _reset_timeout_config(timeout_minutes: int) -> dict:
+    return {
+        DOMAIN: {
+            "rooms": {
+                "office": {
+                    "sensors": {"presence": "binary_sensor.office_presence"},
+                    "lights": ["light.office_lamp"],
+                    "presence_reset_timeout": timeout_minutes,
+                },
+            },
+        },
+    }
+
+
+async def test_presence_reset_reenables_after_timeout(hass: HomeAssistant, make_manager) -> None:
+    """A manual override is lifted after the room stays undetected for the timeout."""
+    manager = await make_manager(_reset_timeout_config(60))
+    room = manager.rooms["office"]
+
+    hass.states.async_set("binary_sensor.office_presence", STATE_ON)
+    room.handle_presence_change()
+    room.handle_light_change(STATE_ON, "off", None)
+    assert not room.presence_lighting_enabled
+    assert not room.presence_reset_timer_active  # still present, no countdown yet
+
+    hass.states.async_set("binary_sensor.office_presence", "off")
+    room.handle_presence_change()
+    assert room.presence_reset_timer_active
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=60, seconds=1))
+    await hass.async_block_till_done()
+
+    assert room.presence_lighting_enabled
+    assert not room.presence_reset_timer_active
+
+
+async def test_presence_reset_cancelled_on_return(hass: HomeAssistant, make_manager) -> None:
+    """Presence returning before the timeout keeps the manual override in place."""
+    manager = await make_manager(_reset_timeout_config(60))
+    room = manager.rooms["office"]
+
+    hass.states.async_set("binary_sensor.office_presence", STATE_ON)
+    room.handle_presence_change()
+    room.handle_light_change(STATE_ON, "off", None)
+    hass.states.async_set("binary_sensor.office_presence", "off")
+    room.handle_presence_change()
+    assert room.presence_reset_timer_active
+
+    hass.states.async_set("binary_sensor.office_presence", STATE_ON)
+    room.handle_presence_change()
+    assert not room.presence_reset_timer_active
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=61))
+    await hass.async_block_till_done()
+    assert not room.presence_lighting_enabled
+
+
+async def test_presence_reset_disabled_when_zero(hass: HomeAssistant, make_manager) -> None:
+    """The default timeout of 0 never re-enables an override."""
+    manager = await make_manager(_reset_timeout_config(0))
+    room = manager.rooms["office"]
+
+    hass.states.async_set("binary_sensor.office_presence", STATE_ON)
+    room.handle_presence_change()
+    room.handle_light_change(STATE_ON, "off", None)
+    hass.states.async_set("binary_sensor.office_presence", "off")
+    room.handle_presence_change()
+
+    assert not room.presence_reset_timer_active
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(days=1))
+    await hass.async_block_till_done()
+    assert not room.presence_lighting_enabled
+
+
+async def test_presence_reset_starts_when_disabled_while_empty(
+    hass: HomeAssistant, make_manager
+) -> None:
+    """Disabling via the switch (or a restart restore) while the room is already
+    empty starts the countdown immediately."""
+    manager = await make_manager(_reset_timeout_config(60))
+    room = manager.rooms["office"]
+    assert not room.is_present
+
+    room.set_presence_lighting_enabled(False)
+    assert room.presence_reset_timer_active
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=60, seconds=1))
+    await hass.async_block_till_done()
+    assert room.presence_lighting_enabled

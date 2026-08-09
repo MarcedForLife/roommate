@@ -62,4 +62,5 @@ class RoomDiagnosticSensor(SensorEntity):
             attrs["bed_exit_timer"] = room.bed_exit_timer_active
             attrs["snapshot"] = room.snapshot_active
         attrs["presence_off_timer"] = room.presence_off_timer_active
+        attrs["presence_reset_timer"] = room.presence_reset_timer_active
         return attrs
