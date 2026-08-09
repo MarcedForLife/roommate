@@ -146,6 +146,8 @@ Per room (using "bedroom" as example):
 
 Bed-related tuning entities only appear when a bed sensor is configured. The per-room `illuminance_threshold` number only appears when an illuminance sensor is available, and `0` means "use the global threshold".
 
+Turning **Bed Automations** off makes the room behave as if no bed sensor were configured, bed readings no longer feed combined presence, the occupant count reads 0, and the room drops out of household sleep tracking. Useful to quarantine a misbehaving sensor or while a guest uses the bed.
+
 Global:
 
 | Entity                                   | Created when                  | Purpose                                                             |

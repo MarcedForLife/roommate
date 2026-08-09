@@ -1784,3 +1784,112 @@ async def test_room_reset_armed_at_startup_when_empty(hass: HomeAssistant, make_
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=60, seconds=1))
     await hass.async_block_till_done()
     assert any(call.service == "media_stop" for call in calls)
+
+
+async def test_disabled_bed_quarantined_from_presence(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """Disabling bed automations removes the bed sensor from combined presence,
+    zeroes the occupant count, and re-enabling restores the current reading."""
+    room = setup_integration.rooms["bedroom"]
+
+    hass.states.async_set("binary_sensor.bedroom_presence", "off")
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    room.handle_presence_change()
+    assert room.is_present
+    assert room.is_in_bed
+    assert room.get_occupant_count() == 1
+
+    room.set_bed_automations_enabled(False)
+    assert not room.is_present
+    assert not room.is_in_bed
+    assert room.get_occupant_count() == 0
+
+    room.set_bed_automations_enabled(True)
+    assert room.is_present
+    assert room.is_in_bed
+    assert room.get_occupant_count() == 1
+
+
+async def test_disabling_bed_dispatches_presence_delta(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """Quarantining a bed that was holding presence runs the presence-ended flow."""
+    room = setup_integration.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("binary_sensor.bedroom_presence", "off")
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    room.handle_presence_change()
+    assert room.is_present
+
+    room.set_bed_automations_enabled(False)
+    await hass.async_block_till_done()
+
+    assert not room.is_present
+    assert any(call.domain == "light" for call in calls)
+
+
+async def test_presence_lighting_ignores_stuck_bed_when_disabled(
+    hass: HomeAssistant,
+    setup_integration: RoommateManager,
+) -> None:
+    """A quarantined bed reading stuck on must not suppress presence lighting."""
+    room = setup_integration.rooms["bedroom"]
+
+    hass.states.async_set("binary_sensor.bed_occupancy", STATE_ON)
+    room.handle_presence_change()
+    room.set_bed_automations_enabled(False)
+
+    with patch.object(room, "_call_service", new_callable=AsyncMock) as mock:
+        await room._on_presence_detected()
+        mock.assert_called_once()
+
+
+async def test_disabled_room_excluded_from_household_sleep(
+    hass: HomeAssistant, make_manager
+) -> None:
+    """A quarantined room does not block everyone-in-bed for the rest of the house."""
+    manager = await make_manager(_two_person_household_config())
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_off", lambda call: calls.append(call))
+    hass.services.async_register("switch", "turn_on", lambda call: calls.append(call))
+
+    hass.states.async_set("person.alice", "home")
+    hass.states.async_set("person.bob", "home")
+    hass.states.async_set("sensor.alice_count", "0")
+    hass.states.async_set("sensor.bob_count", "1")
+
+    await manager.async_on_sleeping(manager.rooms["bob_room"])
+    await hass.async_block_till_done()
+    assert len(calls) == 0  # alice's empty bed blocks while she participates
+
+    manager.rooms["alice_room"].set_bed_automations_enabled(False)
+    await manager.async_on_sleeping(manager.rooms["bob_room"])
+    await hass.async_block_till_done()
+    assert len(calls) > 0  # alice quarantined -> bob alone drives the household
+
+
+async def test_disabled_room_cannot_block_everyone_up(hass: HomeAssistant, make_manager) -> None:
+    """A quarantined bed stuck on 'occupied' does not keep sleep modes active."""
+    manager = await make_manager(_two_person_household_config())
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("switch", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("sensor.alice_count", "1")  # flaky sensor, nobody in bed
+    hass.states.async_set("sensor.bob_count", "0")
+
+    await manager.async_on_everyone_up(manager.rooms["bob_room"])
+    await hass.async_block_till_done()
+    assert len(calls) == 0  # stuck reading blocks while alice participates
+
+    manager.rooms["alice_room"].set_bed_automations_enabled(False)
+    await manager.async_on_everyone_up(manager.rooms["bob_room"])
+    await hass.async_block_till_done()
+    assert len(calls) > 0  # quarantined -> everyone-up proceeds
