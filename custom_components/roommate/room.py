@@ -733,10 +733,18 @@ class Room:
     @callback
     def _on_presence_reset_timer(self, _now: Any) -> None:
         self._presence_reset_timer = None
+        self.hass.async_create_task(self._on_presence_reset())
+
+    async def _on_presence_reset(self) -> None:
+        """Re-enable presence automations and converge the room to its empty baseline:
+        lights and fans off, speakers stopped, room sleep mode off. Anything left
+        running while the override was active (sleep sounds, forced-on lights) would
+        otherwise stay on until the next manual intervention.
+        """
         if self._is_present or self._presence_lighting_enabled:
             return
         _LOGGER.debug(
-            "Room %s: no presence for %d min, re-enabling presence automations",
+            "Room %s: no presence for %d min, resetting room",
             self.name,
             self.config[CONF_PRESENCE_RESET_TIMEOUT],
         )
@@ -745,6 +753,25 @@ class Room:
             self.presence_lighting_switch.async_write_ha_state()
         if self.diagnostic_entity:
             self.diagnostic_entity.async_write_ha_state()
+
+        coros: list = []
+        if self.is_lights_on():
+            coros.append(
+                self._call_service(
+                    "light",
+                    "turn_off",
+                    entity_id=self.light_entities,
+                    transition=self.config[CONF_TRANSITION_OFF],
+                )
+            )
+        for fan in self.config[CONF_FANS]:
+            coros.append(self._call_service("fan", "turn_off", entity_id=fan))
+        for speaker in self.config[CONF_SPEAKERS]:
+            coros.append(self._call_service("media_player", "media_stop", entity_id=speaker))
+        if self.sleep_mode_id:
+            coros.append(self._call_service("switch", "turn_off", entity_id=self.sleep_mode_id))
+        if coros:
+            await asyncio.gather(*coros, return_exceptions=True)
 
     def _cancel_presence_reset_timer(self) -> None:
         if self._presence_reset_timer:

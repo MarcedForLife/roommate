@@ -1581,3 +1581,83 @@ async def test_presence_reset_starts_when_disabled_while_empty(
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=60, seconds=1))
     await hass.async_block_till_done()
     assert room.presence_lighting_enabled
+
+
+def _reset_full_room_config(timeout_minutes: int) -> dict:
+    return {
+        DOMAIN: {
+            "rooms": {
+                "bedroom": {
+                    "sensors": {"presence": "binary_sensor.bedroom_presence"},
+                    "lights": ["light.bedroom_lamp"],
+                    "fans": ["fan.bedroom_fan"],
+                    "speakers": ["media_player.bedroom_speaker"],
+                    "adaptive_lighting": {
+                        "switch": "switch.al_bedroom",
+                        "sleep_mode": "switch.sleep_mode_bedroom",
+                    },
+                    "presence_reset_timeout": timeout_minutes,
+                },
+            },
+        },
+    }
+
+
+async def test_presence_reset_converges_room_state(hass: HomeAssistant, make_manager) -> None:
+    """The reset also stops anything left running: lights, fans, speakers, sleep mode."""
+    manager = await make_manager(_reset_full_room_config(60))
+    room = manager.rooms["bedroom"]
+
+    calls: list[ServiceCall] = []
+    for domain, service in (
+        ("light", "turn_off"),
+        ("fan", "turn_off"),
+        ("media_player", "media_stop"),
+        ("switch", "turn_off"),
+    ):
+        hass.services.async_register(domain, service, lambda call: calls.append(call))
+
+    hass.states.async_set("light.bedroom_lamp", STATE_ON)
+    hass.states.async_set("fan.bedroom_fan", STATE_ON)
+    hass.states.async_set("media_player.bedroom_speaker", "playing")
+    hass.states.async_set("switch.sleep_mode_bedroom", STATE_ON)
+
+    # Lights forced on with automations disabled via the switch, then the room empties.
+    hass.states.async_set("binary_sensor.bedroom_presence", STATE_ON)
+    room.handle_presence_change()
+    room.set_presence_lighting_enabled(False)
+    hass.states.async_set("binary_sensor.bedroom_presence", "off")
+    room.handle_presence_change()
+    assert room.presence_reset_timer_active
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=60, seconds=1))
+    await hass.async_block_till_done()
+
+    assert room.presence_lighting_enabled
+    issued = {(call.domain, call.service) for call in calls}
+    assert ("light", "turn_off") in issued
+    assert ("fan", "turn_off") in issued
+    assert ("media_player", "media_stop") in issued
+    assert ("switch", "turn_off") in issued
+
+
+async def test_presence_reset_skips_lights_already_off(hass: HomeAssistant, make_manager) -> None:
+    """A reset after a manual light-off does not send a redundant light call."""
+    manager = await make_manager(_reset_timeout_config(60))
+    room = manager.rooms["office"]
+
+    calls: list[ServiceCall] = []
+    hass.services.async_register("light", "turn_off", lambda call: calls.append(call))
+
+    hass.states.async_set("light.office_lamp", "off")
+    hass.states.async_set("binary_sensor.office_presence", STATE_ON)
+    room.handle_presence_change()
+    room.handle_light_change(STATE_ON, "off", None)
+    hass.states.async_set("binary_sensor.office_presence", "off")
+    room.handle_presence_change()
+
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(minutes=60, seconds=1))
+    await hass.async_block_till_done()
+
+    assert room.presence_lighting_enabled
+    assert len(calls) == 0
