@@ -39,6 +39,7 @@ from .const import (
     CONF_PRESENCE_OFF_DELAY,
     CONF_PRESENCE_RESET_TIMEOUT,
     CONF_RECENTLY_ON_THRESHOLD,
+    CONF_ROOM_RESET_TIMEOUT,
     CONF_SENSORS,
     CONF_SLEEP_MODE,
     CONF_SPEAKERS,
@@ -245,6 +246,13 @@ class Room:
         """Set initial state from current sensor values without taking actions."""
         self._update_presence_state()
         self._is_in_bed = self._is_bed_occupied()
+        # Reconcile the vacancy countdown: an already-empty room starts it at setup
+        # (so a pending reset isn't lost to a restart), and a sensor first appearing
+        # as detected clears the one armed before it appeared.
+        if self._is_present:
+            self._cancel_presence_reset_timer()
+        else:
+            self._start_presence_reset_timer()
 
     def resync(self, roles: set[str]) -> None:
         """Re-read sensors after an unavailable/unknown gap and run the handlers for
@@ -297,12 +305,12 @@ class Room:
         )
 
     def set_presence_lighting_enabled(self, enabled: bool) -> None:
-        """Set the override state, managing the timed reset that re-enables presence
-        automations after the room has been empty for presence_reset_timeout."""
+        """Set the override state. Disabling while the room is empty (re)starts the
+        reset countdown; the countdown is otherwise vacancy-driven and survives
+        re-enabling, so a pending room reset still cleans the room up (see
+        _on_presence_reset)."""
         self._presence_lighting_enabled = enabled
-        if enabled:
-            self._cancel_presence_reset_timer()
-        elif not self._is_present:
+        if not enabled and not self._is_present:
             self._start_presence_reset_timer()
 
     def set_illuminance_gate_enabled(self, enabled: bool) -> None:
@@ -342,8 +350,7 @@ class Room:
             self.hass.async_create_task(self._on_presence_detected())
         elif not self._is_present and was_present:
             self._start_presence_off_timer()
-            if not self._presence_lighting_enabled:
-                self._start_presence_reset_timer()
+            self._start_presence_reset_timer()
 
         if self.presence_entity:
             self.presence_entity.async_write_ha_state()
@@ -722,9 +729,17 @@ class Room:
             self._presence_off_timer()
             self._presence_off_timer = None
 
+    def _reset_timeout_minutes(self) -> int:
+        """Effective reset countdown: the full room reset supersedes the
+        automations-only presence reset when both are configured."""
+        room_timeout = self.config[CONF_ROOM_RESET_TIMEOUT]
+        if room_timeout > 0:
+            return room_timeout
+        return self.config[CONF_PRESENCE_RESET_TIMEOUT]
+
     def _start_presence_reset_timer(self) -> None:
         self._cancel_presence_reset_timer()
-        timeout_minutes = self.config[CONF_PRESENCE_RESET_TIMEOUT]
+        timeout_minutes = self._reset_timeout_minutes()
         if timeout_minutes > 0:
             self._presence_reset_timer = async_call_later(
                 self.hass, timeout_minutes * 60, self._on_presence_reset_timer
@@ -733,18 +748,57 @@ class Room:
     @callback
     def _on_presence_reset_timer(self, _now: Any) -> None:
         self._presence_reset_timer = None
-        if self._is_present or self._presence_lighting_enabled:
+        self.hass.async_create_task(self._on_presence_reset())
+
+    async def _on_presence_reset(self) -> None:
+        """Runs after the room has been continuously undetected for the reset timeout.
+
+        presence_reset_timeout mode: lift a stale override (re-enable presence
+        automations); a no-op when no override is active.
+        room_reset_timeout mode: additionally converge the room to its empty
+        baseline (lights and fans off, speakers stopped, room sleep mode off),
+        override or not, so nothing left running in an empty room (sleep sounds,
+        forced-on lights) stays on until the next manual intervention.
+        """
+        if self._is_present:
+            return
+        full_reset = self.config[CONF_ROOM_RESET_TIMEOUT] > 0
+        if not full_reset and self._presence_lighting_enabled:
             return
         _LOGGER.debug(
-            "Room %s: no presence for %d min, re-enabling presence automations",
+            "Room %s: no presence for %d min, %s",
             self.name,
-            self.config[CONF_PRESENCE_RESET_TIMEOUT],
+            self._reset_timeout_minutes(),
+            "resetting room" if full_reset else "re-enabling presence automations",
         )
-        self.set_presence_lighting_enabled(True)
-        if self.presence_lighting_switch:
-            self.presence_lighting_switch.async_write_ha_state()
-        if self.diagnostic_entity:
-            self.diagnostic_entity.async_write_ha_state()
+        if not self._presence_lighting_enabled:
+            self.set_presence_lighting_enabled(True)
+            if self.presence_lighting_switch:
+                self.presence_lighting_switch.async_write_ha_state()
+            if self.diagnostic_entity:
+                self.diagnostic_entity.async_write_ha_state()
+
+        if not full_reset:
+            return
+
+        coros: list = []
+        if self.is_lights_on():
+            coros.append(
+                self._call_service(
+                    "light",
+                    "turn_off",
+                    entity_id=self.light_entities,
+                    transition=self.config[CONF_TRANSITION_OFF],
+                )
+            )
+        for fan in self.config[CONF_FANS]:
+            coros.append(self._call_service("fan", "turn_off", entity_id=fan))
+        for speaker in self.config[CONF_SPEAKERS]:
+            coros.append(self._call_service("media_player", "media_stop", entity_id=speaker))
+        if self.sleep_mode_id:
+            coros.append(self._call_service("switch", "turn_off", entity_id=self.sleep_mode_id))
+        if coros:
+            await asyncio.gather(*coros, return_exceptions=True)
 
     def _cancel_presence_reset_timer(self) -> None:
         if self._presence_reset_timer:
