@@ -25,6 +25,7 @@ CONF_BED_EXIT_DELAY = "bed_exit_delay"
 CONF_BED_RETURN_TIMEOUT = "bed_return_timeout"
 CONF_PRESENCE_OFF_DELAY = "presence_off_delay"
 CONF_PRESENCE_RESET_TIMEOUT = "presence_reset_timeout"
+CONF_ROOM_RESET_TIMEOUT = "room_reset_timeout"
 
 # Sensor config keys
 CONF_PRESENCE = "presence"
@@ -68,6 +69,7 @@ TUNING_PARAMS: dict[str, tuple[int, int, int, str, str]] = {
     CONF_BED_RETURN_TIMEOUT: (180, 0, 600, "s", "Quick-return Timeout"),
     CONF_PRESENCE_OFF_DELAY: (0, 0, 120, "s", "Presence Off Delay"),
     CONF_PRESENCE_RESET_TIMEOUT: (0, 0, 1440, "min", "Presence Reset Timeout"),
+    CONF_ROOM_RESET_TIMEOUT: (0, 0, 1440, "min", "Room Reset Timeout"),
     CONF_WAKE_TRANSITION: (60, 0, 300, "s", "Wake Transition"),
     CONF_ILLUMINANCE_THRESHOLD: (0, 0, 100000, "lx", "Illuminance Threshold"),
 }
