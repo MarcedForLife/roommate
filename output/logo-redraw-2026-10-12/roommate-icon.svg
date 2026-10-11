@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Roommate</title>
+  <desc id="description">A cream lampshade above a golden bulb and two separate supports forming an abstract R on an orange badge.</desc>
+  <defs>
+    <linearGradient id="orange" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF9B32"/>
+      <stop offset=".52" stop-color="#FB7C20"/>
+      <stop offset="1" stop-color="#F26B18"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#orange)"/>
+  <g fill="#FFF9ED">
+    <path d="M106 238
+      C97 238 92 232 92 222
+      C92 207 97 192 104 177
+      L143 98
+      C150 82 157 78 171 76
+      C210 70 268 70 297 76
+      C309 78 316 82 322 94
+      C341 127 368 168 398 212
+      C409 227 405 238 391 238 Z"/>
+    <!-- Both support cutouts follow a radius-76 circle centred at 248,250. -->
+    <path d="M112 260 H167.576123
+      A6 6 0 0 1 173.460797 264.829268
+      A76 76 0 0 0 190.536585 299.738878
+      A6 6 0 0 1 192 303.665631
+      V416 Q192 440 168 440
+      H116 Q92 440 92 416
+      V280 Q92 260 112 260 Z"/>
+    <path d="M314.776118 286.289806
+      A6 6 0 0 1 325.244069 286.154791
+      L404.577 423.563
+      Q414 440 394 440
+      H328 Q318 440 313 431
+      L254.283168 336.954564
+      A8 8 0 0 1 259.953146 325.054129
+      A76 76 0 0 0 314.776118 286.289806 Z"/>
+  </g>
+  <!-- The radius-56 bulb leaves 20 units of clearance from both cutouts. -->
+  <path d="M192 250 H304 A56 56 0 0 1 192 250 Z" fill="#FFDD68"/>
+</svg>

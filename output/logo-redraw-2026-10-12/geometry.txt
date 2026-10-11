@@ -1,0 +1,17 @@
+Clean vector redraw of concept 54.
+Source: roommate-icon.svg
+The existing integration assets have not been replaced.
+
+512 by 512 viewBox. Orange badge radius 108.
+Shade underside at y=238. Supports end at y=440.
+Bulb centre (248,250), radius 56.
+Both support cutouts follow the same centre, radius 76.
+20 units of radial clearance around the bulb.
+Support transition fillets are tangent to that shared circle.
+Orange gradient: #FF9B32, #FB7C20, #F26B18.
+Ivory: #FFF9ED. Bulb: #FFDD68.
+
+PNG exports rendered directly from the SVG using Chromium.
+Sizes: 16, 32, 64, 512 and 1024 px.
+RGBA output with antialiased transparent badge corners.
+The 16 px version prioritises the overall silhouette; fine separation is reduced.
