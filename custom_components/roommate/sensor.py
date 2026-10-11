@@ -25,7 +25,7 @@ async def async_setup_entry(
 
 
 class RoomDiagnosticSensor(SensorEntity):
-    """Live room state for debugging (vacant, present, or in_bed with detail attributes)."""
+    """Room state (empty, present, or in_bed) with automation and timer details."""
 
     _attr_has_entity_name = True
     _attr_name = "Room State"

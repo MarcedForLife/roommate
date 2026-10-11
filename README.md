@@ -1,187 +1,118 @@
 <img src="https://raw.githubusercontent.com/MarcedForLife/roommate/main/custom_components/roommate/brand/icon.png"
-     alt="Roommate icon"
-     height="55"
-     align="right"
-     style="float: right; margin: 10px 0px 20px 20px;" />
+     alt="Roommate icon" height="55" align="right" />
 
 # Roommate
 
 [![GitHub Release](https://img.shields.io/github/v/release/MarcedForLife/roommate.svg?style=flat-square)](https://github.com/MarcedForLife/roommate/releases)
-[![GitHub Downloads](https://img.shields.io/github/downloads/MarcedForLife/roommate/total.svg?style=flat-square)](https://github.com/MarcedForLife/roommate/releases)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://github.com/hacs/integration)
 [![License](https://img.shields.io/github/license/MarcedForLife/roommate.svg?style=flat-square)](LICENSE.md)
 
-A Home Assistant integration that automates room behaviour based on presence and bed occupancy. Configure via the UI or YAML, and the integration handles the rest.
+Roommate is a Home Assistant integration for presence lighting and bedtime routines. Start with a presence sensor and a light. Add bed sensors to dim the lights when you get into bed, fade them on when you get up, and coordinate sleep mode across rooms.
 
-## Features
+It supports manual lighting overrides, illuminance thresholds, Adaptive Lighting, and room resets after a period of vacancy. You can adjust brightness and timing from the room's device page.
 
-- **Presence lighting** with configurable transitions
-- **Bed occupancy** handling (dim on entry, restore on exit, wake transition)
-- **Manual override detection** that suppresses presence lighting when you manually turn off a light, with an optional timed reset that re-enables automations once the room has been empty for a while
-- **Room reset** that returns an empty room to its baseline (lights, fans, media, and sleep mode off) after a configurable vacancy timeout, override or not
-- **Household sleep/wake** coordination across multiple rooms
-- **Quick return snapshot** that restores room state (lights, fans, paused media) if you get back in bed within a configurable window
-- **Adaptive lighting** integration (restore auto-brightness on bed exit)
-- **Illuminance gating** that skips turning lights on when ambient light is above threshold (global default with per-room overrides)
-- **Guest mode** switch to suppress sleep light activation
-- **Live tuning** via number entities on the device page
+## Install
 
-## How it works
+Requires Home Assistant 2025.12 or later.
 
-Each room follows a state lifecycle based on sensor events:
+[![Open Roommate in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MarcedForLife&repository=roommate&category=Integration)
 
-```mermaid
-stateDiagram-v2
-    direction LR
+Install through HACS using the link above, or add `https://github.com/MarcedForLife/roommate` as a custom repository with the Integration category. Download Roommate and restart Home Assistant.
 
-    Empty --> Present: Presence detected
-    Present --> Empty: Presence ended
+For a manual install, copy `custom_components/roommate` into your Home Assistant configuration directory's `custom_components` folder, then restart.
 
-    Present --> InBed: Bed occupied
-    InBed --> Present: Bed exit (debounced)
+## Set up
 
-    Present --> Overridden: Manual light off
-    Overridden --> Present: Manual light on\nor bed empty
-    Overridden --> Empty: Undetected for\nreset timeout
-```
+In Settings > Devices & services > Add integration, search for Roommate. Add a room, select its presence sensor and lights, then finish setup. Bed sensors, fans, speakers, and Adaptive Lighting are optional. Use the integration's configuration menu to add, edit, or remove rooms and change global settings.
 
-| State          | Room behaviour                                                                  |
-| -------------- | ------------------------------------------------------------------------------- |
-| **Empty**      | Lights off                                                                      |
-| **Present**    | Lights on (adaptive)                                                            |
-| **In Bed**     | Lights dimmed or off, fans/speakers controlled                                  |
-| **Overridden** | Presence lighting suppressed until manual light-on, bed empty, or reset timeout |
-
-The `room_state` diagnostic sensor reports `empty`, `present`, or `in_bed`. Overridden is not a separate value, it is surfaced as the sensor's `presence_lighting` attribute (`active` or `overridden`).
-
-When a room has `bed.persons` configured, it participates in the household sleep/wake lifecycle:
-
-```mermaid
-flowchart LR
-    A["Everyone<br>in bed"] -->|"sleep lights off<br>sleep modes on"| B["Sleeping"]
-    B -->|"someone gets up<br>sleep lights on"| C["Waking"]
-    C -->|"all beds empty<br>sleep modes off"| D["Everyone<br>up"]
-```
-
-Sleep lights only activate when getting up during the sleep cycle, and only if illuminance is below threshold and guest mode is off.
-
-## Configuration
+You can also import an initial configuration from YAML. Add this to `configuration.yaml`, replace the entity IDs, and restart Home Assistant.
 
 ```yaml
 roommate:
-  # Global settings
-  illuminance_sensor: sensor.illuminance   # Optional
-  illuminance_threshold: 4000              # Lux, default 4000
-  sleep_lights:                            # Lights to manage on sleep/wake
-    - entity_id: light.living_room_lights
-      inhibit:                             # Suppress this light when any is on
-        - switch.theatre_lighting
-    - light.toilet_light                   # Simple form, no inhibitors
-  sleep_modes:                             # Switches to toggle on sleep/wake
-    - switch.adaptive_lighting_sleep_mode_living_room
-
   rooms:
     bedroom:
       sensors:
-        presence: binary_sensor.bedroom_mmwave         # Required
-        illuminance: sensor.bedroom_lux                # Optional, overrides global
-        bed:                                           # Optional
-          presence: binary_sensor.bed_occupancy
-          occupants: sensor.bed_occupant_count
-          persons:
-            - person.alice
-            - person.bob
-
-      lights:                                          # Required
-        - light.bedside_lamp_1
-        - light.bedside_lamp_2
-      fans:                                            # Optional
-        - fan.bedroom_fan
-      speakers:                                        # Optional
-        - media_player.bedroom_speaker
-
-      adaptive_lighting:                               # Optional
-        switch: switch.adaptive_lighting_bedroom
-        sleep_mode: switch.adaptive_lighting_sleep_mode_bedroom
-
-      # Tunables (all optional, shown with defaults)
-      dim_brightness: 5              # Percent, when getting in bed
-      recently_on_threshold: 8       # Seconds, skip dimming if lights just turned on
-      transition_on: 2               # Seconds
-      transition_off: 5              # Seconds
-      transition_dim: 5              # Seconds
-      wake_transition: 60            # Seconds, fade lights on when leaving bed
-      bed_exit_delay: 10             # Seconds, debounce before triggering bed exit
-      bed_return_timeout: 180        # Seconds, restore room state on quick return
-      presence_off_delay: 0          # Seconds, debounce before lights off
-      presence_reset_timeout: 0      # Minutes undetected before presence automations re-enable; 0 disables
-      room_reset_timeout: 0          # Minutes undetected before a full room reset (automations, lights, media), override or not; supersedes presence_reset_timeout; 0 disables
-      illuminance_threshold: 0       # Lux override; 0 means use global threshold
+        presence: binary_sensor.bedroom_presence
+      lights:
+        - light.bedroom_lamp
 ```
 
-### Minimal room (motion sensor + lights only)
+YAML is imported only when no Roommate config entry exists. After import, manage settings through the UI. Editing YAML and restarting does not update an existing entry.
 
-```yaml
-rooms:
-  guest_bedroom:
-    sensors:
-      presence: binary_sensor.guest_bedroom_mmwave
-    lights:
-      - light.guest_lamp
-```
+See [example_config.yaml](example_config.yaml) for bed sensors, household settings, and all tuning defaults.
 
-## Auto-created entities
+## Room behaviour
 
-Per room (using "bedroom" as example):
+| Event | Action |
+| --- | --- |
+| Presence detected | Turn on the room lights, unless overridden, the bed is occupied, or the room is bright enough. |
+| Room becomes empty | Turn off the lights after `presence_off_delay`, unless overridden. |
+| Bed becomes occupied | Dim the room lights if any are on. If a light was just turned on, turn them off instead. |
+| Bed becomes empty | Wait for `bed_exit_delay`, restore presence lighting, turn off fans, and pause or stop speakers. |
+| Return to bed within `bed_return_timeout` | Restore the saved lights, fans, sleep mode, and previously playing media. |
 
-| Entity                                            | Created when                   | Purpose                                 |
-| ------------------------------------------------- | ------------------------------ | --------------------------------------- |
-| `binary_sensor.roommate_bedroom_presence`         | Always                         | Combined presence (motion OR bed)       |
-| `sensor.roommate_bedroom_room_state`              | Always                         | Diagnostic state (empty/present/in_bed) |
-| `switch.roommate_bedroom_presence_automations`    | Always                         | Toggle presence-based lighting          |
-| `switch.roommate_bedroom_bed_automations`         | Bed sensor configured          | Toggle bed-related automations          |
-| `switch.roommate_bedroom_illuminance_gating`      | Illuminance sensor available   | Off bypasses the lux threshold          |
-| `button.roommate_bedroom_restore_auto_brightness` | Adaptive lighting configured   | Restore auto-brightness                 |
-| `number.roommate_bedroom_*`                       | Per tuning param (conditional) | Adjust timing and brightness values     |
+Combined presence includes both the room presence sensor and bed occupancy. A bed can use a binary presence sensor, an occupant count sensor, or both.
 
-Bed-related tuning entities only appear when a bed sensor is configured. The per-room `illuminance_threshold` number only appears when an illuminance sensor is available, and `0` means "use the global threshold".
+On bed exit, lights that are already on return to automatic control when Adaptive Lighting is configured. If the lights are off and the room is still occupied and dark enough, they fade on over `wake_transition` seconds. The quick return window defaults to 180 seconds. Set it to `0` to disable snapshots and stop speakers immediately on bed exit.
 
-Turning **Bed Automations** off makes the room behave as if no bed sensor were configured, bed readings no longer feed combined presence, the occupant count reads 0, and the room drops out of household sleep tracking. Useful to quarantine a misbehaving sensor or while a guest uses the bed.
+### Manual overrides and resets
 
-Global:
+Turning a room light off while the room is occupied disables presence lighting. Turning a light on, leaving bed, or enabling the Presence Automations switch restores it.
 
-| Entity                                   | Created when                  | Purpose                                                             |
-| ---------------------------------------- | ----------------------------- | ------------------------------------------------------------------- |
-| `switch.roommate_guest_mode`             | Always                        | Suppress sleep light activation                                     |
-| `number.roommate_sleep_light_transition` | Sleep lights configured       | Sleep light fade duration                                           |
-| `number.roommate_illuminance_threshold`  | Illuminance sensor configured | Lux threshold for sleep lights (per-room can override room actions) |
+Two optional timers handle empty rooms. Both default to `0` (disabled) and count minutes of continuous vacancy.
 
-All entities are grouped under per-room "Roommate {Room}" devices or the global "Roommate" hub device.
+| Setting | Action when the timer expires |
+| --- | --- |
+| `presence_reset_timeout` | Re-enable presence lighting. |
+| `room_reset_timeout` | Re-enable presence lighting, turn off lights and fans, stop speakers, and turn off the room's sleep mode. |
 
-## Installation
+A nonzero `room_reset_timeout` takes precedence over `presence_reset_timeout` and runs even when there is no manual override.
 
-### HACS
+### Illuminance
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=MarcedForLife&repository=roommate&category=Integration)
+A room uses its own illuminance sensor when configured, otherwise the global sensor. A room threshold of `0` uses the global threshold, which defaults to 4000 lux. Turn off the room's Illuminance Gating switch to bypass the threshold.
 
-Or manually: add this repository as a custom repository in HACS, then install "Roommate."
+### Household sleep and wake
 
-### Manual
+Rooms with `sensors.bed.persons` configured participate in household sleep tracking. Roommate checks which people are home and whether their beds are occupied. An occupant count sensor checks how many people are in bed. A binary sensor treats an occupied bed as enough for everyone assigned to it.
 
-1. Copy `custom_components/roommate` to your HA `custom_components/` directory
-2. Restart Home Assistant
+When everyone tracked at home is in bed, Roommate turns off the global `sleep_lights` and enables `sleep_modes`. When someone gets up, it turns on eligible sleep lights. Once all tracked beds are empty, it disables the sleep modes.
 
-### Setup
+Sleep lights use the waking room's illuminance settings. Guest Mode suppresses their activation, and each sleep light can have `inhibit` entities that block it while any is on. If global sleep modes are configured, at least one must be on for sleep lights to activate on waking.
 
-After installing, you can set up Roommate in two ways:
+## Entities and controls
 
-- **UI**: Go to Settings > Devices & Services > Add Integration, search for "Roommate"
-- **YAML**: Add the configuration to your `configuration.yaml` and restart Home Assistant
+Each room has a Roommate device. These are example entity IDs for a room named `bedroom`. Home Assistant may assign different IDs if they already exist or have been renamed.
+
+| Entity | Available when | Purpose |
+| --- | --- | --- |
+| `binary_sensor.roommate_bedroom_presence` | Always | Combined room and bed presence |
+| `sensor.roommate_bedroom_room_state` | Always | `empty`, `present`, or `in_bed` |
+| `switch.roommate_bedroom_presence_automations` | Always | Enable presence lighting |
+| `switch.roommate_bedroom_bed_automations` | Bed sensor configured | Enable bed automations |
+| `switch.roommate_bedroom_illuminance_gating` | Illuminance sensor available | Apply the lux threshold |
+| `button.roommate_bedroom_restore_auto_brightness` | Adaptive Lighting configured | Restore automatic light control |
+| `number.roommate_bedroom_*` | Relevant sensor configured | Adjust brightness, transitions, and timers |
+
+Presence timing controls are always available. Bed controls require a bed sensor, and the room illuminance threshold requires a room or global illuminance sensor. Number changes are saved and apply without reloading the integration.
+
+Disabling Bed Automations excludes bed readings from combined presence and household sleep tracking. The reported occupant count becomes `0`.
+
+The Room State sensor reports overrides in its `presence_lighting` attribute as `active` or `overridden`. It also exposes timer status and, for rooms with a bed sensor, bed automation status, occupant count, and snapshot status.
+
+The global Roommate device contains Guest Mode, Sleep Light Transition when sleep lights are configured, and Illuminance Threshold when a global illuminance sensor is configured.
 
 ## Development
 
-### Translations
+The development environment requires Python 3.14.2 or later and `uv`. From the repository root, run the same test and lint checks used in CI.
 
-UI labels and descriptions live in `translations/`.
+```sh
+uv sync --locked
+uv run --no-sync ruff check
+uv run --no-sync ruff format --check
+uv run --no-sync pytest --cov=custom_components.roommate
+```
 
-Room setup steps and global settings are duplicated under `config` and `options` because HA resolves translations per flow type with no way to share between them. When editing these, update both sections.
+The integration source is in `custom_components/roommate`, with tests in `tests`. The development Python requirement comes from the test environment. Ruff targets Python 3.13 for compatibility with the minimum supported Home Assistant version.
+
+UI labels live in `custom_components/roommate/translations/en.json`. Shared setup and options labels appear under both `config` and `options`. Update both sections when changing them.
