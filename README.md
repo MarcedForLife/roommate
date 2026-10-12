@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/MarcedForLife/roommate/main/custom_components/roommate/brand/icon.png"
+<img src="custom_components/roommate/brand/icon.png"
      alt="Roommate icon" height="55" align="right" />
 
 # Roommate
@@ -51,9 +51,11 @@ See [example_config.yaml](example_config.yaml) for bed sensors, household settin
 | Bed becomes empty | Wait for `bed_exit_delay`, restore presence lighting, turn off fans, and pause or stop speakers. |
 | Return to bed within `bed_return_timeout` | Restore the saved lights, fans, sleep mode, and previously playing media. |
 
-Combined presence includes both the room presence sensor and bed occupancy. A bed can use a binary presence sensor, an occupant count sensor, or both.
+Combined presence includes both the room presence sensor and bed occupancy. A bed can use a binary presence sensor, an occupant count sensor, or both. When both are configured, either can keep combined presence active. The binary sensor triggers room bed-entry and bed-exit actions, while count changes trigger household sleep and wake checks.
 
-On bed exit, lights that are already on return to automatic control when Adaptive Lighting is configured. If the lights are off and the room is still occupied and dark enough, they fade on over `wake_transition` seconds. The quick return window defaults to 180 seconds. Set it to `0` to disable snapshots and stop speakers immediately on bed exit.
+On bed exit, lights that are already on return to automatic control when Adaptive Lighting is configured. If the lights are off and the room is still occupied and dark enough, they fade on over `wake_transition` seconds.
+
+The quick return window starts after `bed_exit_delay` (10 seconds by default) and lasts for `bed_return_timeout` (180 seconds by default). Returning before the exit delay ends cancels the pending bed-exit actions. Once the return window expires, Roommate discards the snapshot and stops the speakers it paused. Set `bed_return_timeout` to `0` to disable snapshots and stop speakers after the exit delay without pausing first.
 
 ### Manual overrides and resets
 
