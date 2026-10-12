@@ -1,0 +1,38 @@
+Round 18. Concept 54 rebuilt from one parametric generator, then varied.
+tools/build_variants.py writes every SVG. tools/render.js exports PNGs with
+the Playwright Chromium in ~/.local/share/playwright, tools/sheet.py builds
+the review sheets. 54-vector.svg is the round 17 redraw, kept for comparison.
+
+Rebuild from this folder:
+  python3 tools/build_variants.py .
+  NODE_PATH=~/.local/share/playwright/node_modules node tools/render.js svg 1024 png *.svg
+
+Changes from the round 17 redraw
+- One 18 unit gap everywhere, measured as a clearance band around the bulb.
+  The redraw had 12 between shade and bulb, 20 around the bulb, 22 above the stem.
+- Shade has straight edges, 20 unit top corners, 12 unit bottom corners.
+  The redraw's bezier top edge bowed.
+- Leg is a constant 68 unit stroke with its axis through the bulb centre and
+  a flat foot on the baseline. The redraw's leg tapered.
+- Both scoops come from the same circle (bulb radius plus gap) with tangent
+  fillets at every junction, so there are no teeth or horns.
+- Bulb top and support tops share y=256. The mark is centred on the badge.
+
+Candidates
+60-soft-tips  Refined 54. Bulb radius 60, leg fillets 20, stem scoop fillet 24,
+              leg toe radius 16.
+57-joined-stem  Stem and shade are one piece. The gap arc flows round the
+              bulb's flat end into the scoop. Strongest R at 16 and 24 px.
+
+Explorations
+55  Even gaps with bulb 56, the baseline for the rest.
+56  Bulb 64, deeper scoops.
+58  Full circle bulb. Reads as a lamp over a ball, weaker R.
+59  Leg axis 12 units right of the bulb, spoon shaped leg top.
+61  Bulb inside the shade as the R counter, plain supports. Simplest
+    geometry, holds at 16 px, weaker lamp reading.
+62  Candidate on the round badge at 88 percent.
+63  Candidate with an ivory bulb for one colour use.
+64  Bare glyph in charcoal with an orange bulb. Dark grounds need an ivory fill.
+
+Exports: 57 and 60 at 16, 32, 64, 512 and 1024 px, RGBA with transparent corners.

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Roommate</title>
+  <desc id="description">A cream lampshade above a golden bulb and two supports forming an abstract R on an orange badge.</desc>
+  <defs><linearGradient id="orange" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FF9B32"/><stop offset=".52" stop-color="#FB7C20"/><stop offset="1" stop-color="#F26B18"/></linearGradient></defs><rect width="512" height="512" rx="108" fill="url(#orange)"/>
+  <g transform="translate(8 0)">
+  <path d="M92 242.204 A24 24 0 0 1 93.429 234.046 L147.228 85.202 A20 20 0 0 1 166.037 72 L288.929 72 A20 20 0 0 1 305.878 81.382 L392.49 219.629 A12 12 0 0 1 382.321 238 L188 238 A18 18 0 0 0 170 256 A78 78 0 0 0 187.51 305.244 A20 20 0 0 1 192 317.871 L192 426 A14 14 0 0 1 178 440 L106 440 A14 14 0 0 1 92 426 L92 242.204 Z" fill="#FFF9ED"/>
+  <path d="M324.774 320.976 L381.368 419 A14 14 0 0 1 369.244 440 L323.056 440 A14 14 0 0 1 310.931 433 L265.884 354.976 A18 18 0 0 1 275.196 329.105 A78 78 0 0 0 297.713 316.105 A18 18 0 0 1 324.774 320.976 Z" fill="#FFF9ED"/>
+  <path d="M188 256 H308 A60 60 0 0 1 188 256 Z" fill="#FFDD68"/>
+  </g>
+</svg>
