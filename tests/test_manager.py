@@ -84,7 +84,7 @@ async def test_manual_override_ignores_own_context(
     room.handle_presence_change()
 
     ctx = Context()
-    room._our_context_ids.add(ctx.id)
+    room.register_context(ctx.id)
     room.handle_light_change(STATE_ON, "off", ctx)
     assert room.presence_lighting_enabled
 
