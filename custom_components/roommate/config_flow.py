@@ -36,19 +36,23 @@ from .const import (
     CONF_SLEEP_MODES,
     CONF_SPEAKERS,
     CONF_SWITCH,
-    DEFAULT_ILLUMINANCE_THRESHOLD,
-    DEFAULT_SLEEP_LIGHT_TRANSITION,
     DOMAIN,
+    GLOBAL_TUNING_PARAMS,
     TUNING_PARAMS,
+    TuningParam,
 )
+
+SETUP_MENU = ["add_room", "global_settings", "finish_setup"]
 
 
 class RoomSetupMixin:
     """Shared room configuration steps for config and options flows."""
 
-    _options: dict[str, Any]
-    _room_data: dict[str, Any]
-    _room_name: str
+    def __init__(self) -> None:
+        super().__init__()
+        self._options: dict[str, Any] = {}
+        self._room_data: dict[str, Any] = {}
+        self._room_name = ""
 
     def _placeholders(self) -> dict[str, str]:
         return {"room_name": self._room_name.replace("_", " ").title()}
@@ -56,6 +60,27 @@ class RoomSetupMixin:
     def _save_room(self):
         """Save the completed room. Implemented by each flow."""
         raise NotImplementedError
+
+    async def async_step_add_room(self, user_input: dict[str, Any] | None = None):
+        """Prompt for the new room's name."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            slug = slugify(user_input["name"])
+            if not slug:
+                errors["name"] = "invalid_name"
+            elif slug in self._options.get(CONF_ROOMS, {}):
+                errors["name"] = "room_exists"
+            else:
+                self._room_name = slug
+                self._room_data = {}
+                return await self.async_step_room_sensors()
+
+        return self.async_show_form(
+            step_id="add_room",
+            data_schema=vol.Schema({vol.Required("name"): TextSelector()}),
+            errors=errors,
+        )
 
     async def async_step_room_sensors(self, user_input: dict[str, Any] | None = None):
         """Configure room sensors."""
@@ -117,22 +142,27 @@ class RoomSetupMixin:
 
     async def async_step_room_devices(self, user_input: dict[str, Any] | None = None):
         """Configure lights, fans, speakers, and adaptive lighting."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
-            self._room_data[CONF_LIGHTS] = user_input["lights"]
-            self._room_data[CONF_FANS] = user_input.get("fans", [])
-            self._room_data[CONF_SPEAKERS] = user_input.get("speakers", [])
-
-            al_switch = user_input.get("al_switch")
-            if al_switch:
-                al_config: dict[str, str] = {CONF_SWITCH: al_switch}
-                al_sleep = user_input.get("al_sleep_mode")
-                if al_sleep:
-                    al_config[CONF_SLEEP_MODE] = al_sleep
-                self._room_data[CONF_ADAPTIVE_LIGHTING] = al_config
+            if not user_input["lights"]:
+                errors["lights"] = "lights_required"
             else:
-                self._room_data.pop(CONF_ADAPTIVE_LIGHTING, None)
+                self._room_data[CONF_LIGHTS] = user_input["lights"]
+                self._room_data[CONF_FANS] = user_input.get("fans", [])
+                self._room_data[CONF_SPEAKERS] = user_input.get("speakers", [])
 
-            return await self.async_step_room_tuning()
+                al_switch = user_input.get("al_switch")
+                if al_switch:
+                    al_config: dict[str, str] = {CONF_SWITCH: al_switch}
+                    al_sleep = user_input.get("al_sleep_mode")
+                    if al_sleep:
+                        al_config[CONF_SLEEP_MODE] = al_sleep
+                    self._room_data[CONF_ADAPTIVE_LIGHTING] = al_config
+                else:
+                    self._room_data.pop(CONF_ADAPTIVE_LIGHTING, None)
+
+                return await self.async_step_room_tuning()
 
         al_existing = self._room_data.get(CONF_ADAPTIVE_LIGHTING, {})
         suggested = {
@@ -158,6 +188,7 @@ class RoomSetupMixin:
         return self.async_show_form(
             step_id="room_devices",
             data_schema=self.add_suggested_values_to_schema(schema, suggested),
+            errors=errors,
             description_placeholders=self._placeholders(),
         )
 
@@ -185,55 +216,28 @@ class RoommateConfigFlow(RoomSetupMixin, ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     def __init__(self) -> None:
-        self._options: dict[str, Any] = {
+        super().__init__()
+        self._options = {
             CONF_ROOMS: {},
             CONF_SLEEP_LIGHTS: [],
             CONF_SLEEP_MODES: [],
-            CONF_ILLUMINANCE_THRESHOLD: DEFAULT_ILLUMINANCE_THRESHOLD,
-            CONF_SLEEP_LIGHT_TRANSITION: DEFAULT_SLEEP_LIGHT_TRANSITION,
+            **{key: param.default for key, param in GLOBAL_TUNING_PARAMS.items()},
         }
-        self._room_data: dict[str, Any] = {}
-        self._room_name: str = ""
+
+    def _show_setup_menu(self):
+        return self.async_show_menu(step_id="user", menu_options=SETUP_MENU)
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         """Show the setup menu."""
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
-
-        return self.async_show_menu(
-            step_id="user",
-            menu_options=["add_room", "global_settings", "finish_setup"],
-        )
-
-    async def async_step_add_room(self, user_input: dict[str, Any] | None = None):
-        """Prompt for a room name during initial setup."""
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            slug = slugify(user_input["name"])
-            if not slug:
-                errors["name"] = "invalid_name"
-            elif slug in self._options.get(CONF_ROOMS, {}):
-                errors["name"] = "room_exists"
-            else:
-                self._room_name = slug
-                self._room_data = {}
-                return await self.async_step_room_sensors()
-
-        return self.async_show_form(
-            step_id="add_room",
-            data_schema=vol.Schema({vol.Required("name"): TextSelector()}),
-            errors=errors,
-        )
+        return self._show_setup_menu()
 
     async def async_step_global_settings(self, user_input: dict[str, Any] | None = None):
         """Configure global sleep and illuminance settings during initial setup."""
         if user_input is not None:
             _apply_global_settings(self._options, user_input)
-            return self.async_show_menu(
-                step_id="user",
-                menu_options=["add_room", "global_settings", "finish_setup"],
-            )
+            return self._show_setup_menu()
 
         return self.async_show_form(
             step_id="global_settings",
@@ -244,32 +248,18 @@ class RoommateConfigFlow(RoomSetupMixin, ConfigFlow, domain=DOMAIN):
 
     async def async_step_finish_setup(self, user_input: dict[str, Any] | None = None):
         """Create the integration entry with the accumulated configuration."""
-        return self.async_create_entry(
-            title="Roommate",
-            data={},
-            options=self._options,
-        )
+        return self.async_create_entry(title="Roommate", data={}, options=self._options)
 
     def _save_room(self):
         """Save the room and return to the setup menu."""
-        rooms = dict(self._options.get(CONF_ROOMS, {}))
-        rooms[self._room_name] = self._room_data
-        self._options[CONF_ROOMS] = rooms
-        return self.async_show_menu(
-            step_id="user",
-            menu_options=["add_room", "global_settings", "finish_setup"],
-        )
+        self._options[CONF_ROOMS] = {**self._options[CONF_ROOMS], self._room_name: self._room_data}
+        return self._show_setup_menu()
 
     async def async_step_import(self, import_data: dict[str, Any]):
         """Import configuration from YAML."""
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
-
-        return self.async_create_entry(
-            title="Roommate",
-            data={},
-            options=import_data,
-        )
+        return self.async_create_entry(title="Roommate", data={}, options=import_data)
 
     @staticmethod
     @callback
@@ -280,43 +270,16 @@ class RoommateConfigFlow(RoomSetupMixin, ConfigFlow, domain=DOMAIN):
 class RoommateOptionsFlow(RoomSetupMixin, OptionsFlow):
     """Manage rooms and global settings."""
 
-    def __init__(self) -> None:
-        self._options: dict[str, Any] = {}
-        self._room_data: dict[str, Any] = {}
-        self._room_name: str = ""
-
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         """Show the main configuration menu."""
         self._options = dict(self.config_entry.options)
-        rooms = self._options.get(CONF_ROOMS, {})
 
         menu = ["add_room"]
-        if rooms:
+        if self._options.get(CONF_ROOMS):
             menu.extend(["edit_room", "remove_room"])
         menu.append("global_settings")
 
         return self.async_show_menu(step_id="init", menu_options=menu)
-
-    async def async_step_add_room(self, user_input: dict[str, Any] | None = None):
-        """Prompt for the new room's name."""
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            slug = slugify(user_input["name"])
-            if not slug:
-                errors["name"] = "invalid_name"
-            elif slug in self._options.get(CONF_ROOMS, {}):
-                errors["name"] = "room_exists"
-            else:
-                self._room_name = slug
-                self._room_data = {}
-                return await self.async_step_room_sensors()
-
-        return self.async_show_form(
-            step_id="add_room",
-            data_schema=vol.Schema({vol.Required("name"): TextSelector()}),
-            errors=errors,
-        )
 
     async def async_step_edit_room(self, user_input: dict[str, Any] | None = None):
         """Select a room to edit."""
@@ -363,8 +326,7 @@ class RoommateOptionsFlow(RoomSetupMixin, OptionsFlow):
 
     def _save_room(self):
         """Save the room to options and finish the flow."""
-        rooms = dict(self._options.get(CONF_ROOMS, {}))
-        rooms[self._room_name] = self._room_data
+        rooms = {**self._options.get(CONF_ROOMS, {}), self._room_name: self._room_data}
         self._options[CONF_ROOMS] = rooms
         return self.async_create_entry(data=self._options)
 
@@ -385,12 +347,8 @@ def _apply_global_settings(options: dict[str, Any], user_input: dict[str, Any]) 
     else:
         options.pop(CONF_ILLUMINANCE_SENSOR, None)
 
-    options[CONF_ILLUMINANCE_THRESHOLD] = float(
-        user_input.get(CONF_ILLUMINANCE_THRESHOLD, DEFAULT_ILLUMINANCE_THRESHOLD)
-    )
-    options[CONF_SLEEP_LIGHT_TRANSITION] = int(
-        user_input.get(CONF_SLEEP_LIGHT_TRANSITION, DEFAULT_SLEEP_LIGHT_TRANSITION)
-    )
+    options[CONF_ILLUMINANCE_THRESHOLD] = float(user_input[CONF_ILLUMINANCE_THRESHOLD])
+    options[CONF_SLEEP_LIGHT_TRANSITION] = int(user_input[CONF_SLEEP_LIGHT_TRANSITION])
 
 
 def _global_settings_suggested(options: dict[str, Any]) -> dict[str, Any]:
@@ -400,12 +358,7 @@ def _global_settings_suggested(options: dict[str, Any]) -> dict[str, Any]:
         "sleep_lights": current_light_ids or None,
         "sleep_modes": options.get(CONF_SLEEP_MODES) or None,
         "illuminance_sensor": options.get(CONF_ILLUMINANCE_SENSOR),
-        CONF_ILLUMINANCE_THRESHOLD: options.get(
-            CONF_ILLUMINANCE_THRESHOLD, DEFAULT_ILLUMINANCE_THRESHOLD
-        ),
-        CONF_SLEEP_LIGHT_TRANSITION: options.get(
-            CONF_SLEEP_LIGHT_TRANSITION, DEFAULT_SLEEP_LIGHT_TRANSITION
-        ),
+        **{key: options.get(key, param.default) for key, param in GLOBAL_TUNING_PARAMS.items()},
     }
 
 
@@ -416,24 +369,10 @@ def _global_settings_schema() -> vol.Schema:
             vol.Optional("sleep_lights"): EntitySelector({"domain": "light", "multiple": True}),
             vol.Optional("sleep_modes"): EntitySelector({"domain": "switch", "multiple": True}),
             vol.Optional("illuminance_sensor"): EntitySelector({"domain": "sensor"}),
-            vol.Required(CONF_ILLUMINANCE_THRESHOLD): NumberSelector(
-                {
-                    "min": 0,
-                    "max": 100000,
-                    "step": 100,
-                    "unit_of_measurement": "lx",
-                    "mode": "box",
-                }
-            ),
-            vol.Required(CONF_SLEEP_LIGHT_TRANSITION): NumberSelector(
-                {
-                    "min": 0,
-                    "max": 30,
-                    "step": 1,
-                    "unit_of_measurement": "s",
-                    "mode": "box",
-                }
-            ),
+            **{
+                vol.Required(key): _number_selector(param)
+                for key, param in GLOBAL_TUNING_PARAMS.items()
+            },
         }
     )
 
@@ -450,17 +389,23 @@ def _room_selector(rooms: dict) -> SelectSelector:
     )
 
 
+def _number_selector(param: TuningParam) -> NumberSelector:
+    return NumberSelector(
+        {
+            "min": param.minimum,
+            "max": param.maximum,
+            "step": param.step,
+            "unit_of_measurement": param.unit,
+            "mode": "box",
+        }
+    )
+
+
 def _tuning_schema() -> vol.Schema:
     """Build the tuning parameter schema from the central TUNING_PARAMS table."""
-    fields: dict = {}
-    for key, param in TUNING_PARAMS.items():
-        fields[vol.Optional(key, default=param.default)] = NumberSelector(
-            {
-                "min": param.minimum,
-                "max": param.maximum,
-                "step": param.step,
-                "unit_of_measurement": param.unit,
-                "mode": "box",
-            }
-        )
-    return vol.Schema(fields)
+    return vol.Schema(
+        {
+            vol.Optional(key, default=param.default): _number_selector(param)
+            for key, param in TUNING_PARAMS.items()
+        }
+    )

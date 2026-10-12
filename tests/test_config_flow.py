@@ -276,6 +276,28 @@ async def test_options_add_room_bed_requires_sensor(hass: HomeAssistant) -> None
     assert result["errors"]["bed_presence"] == "bed_requires_sensor"
 
 
+async def test_options_add_room_lights_required(hass: HomeAssistant) -> None:
+    """Test validation: a room needs at least one light."""
+    entry = MockConfigEntry(domain=DOMAIN, data={}, options=_empty_options())
+    entry.add_to_hass(hass)
+
+    result = await _start_options_flow(hass, entry)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "add_room"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"name": "bedroom"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"presence": "binary_sensor.motion"}
+    )
+    assert result["step_id"] == "room_devices"
+
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"lights": []})
+    assert result["step_id"] == "room_devices"
+    assert result["errors"]["lights"] == "lights_required"
+
+
 async def test_options_add_room_duplicate_name(hass: HomeAssistant) -> None:
     """Test validation: duplicate room name shows an error."""
     options = _empty_options()
