@@ -6,6 +6,7 @@ import copy
 
 import pytest
 import voluptuous as vol
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -26,11 +27,11 @@ async def test_setup_entry(hass: HomeAssistant, full_config: dict) -> None:
     entry = MockConfigEntry(domain=DOMAIN, data={}, options=validated[DOMAIN])
     await _setup_entry(hass, entry)
 
-    manager = hass.data[DOMAIN][entry.entry_id]["manager"]
+    manager = entry.runtime_data
     assert "bedroom" in manager.rooms
 
     assert await hass.config_entries.async_unload(entry.entry_id)
-    assert entry.entry_id not in hass.data[DOMAIN]
+    assert not hasattr(entry, "runtime_data")
 
 
 async def test_setup_entry_minimal(hass: HomeAssistant, minimal_config: dict) -> None:
@@ -39,7 +40,7 @@ async def test_setup_entry_minimal(hass: HomeAssistant, minimal_config: dict) ->
     entry = MockConfigEntry(domain=DOMAIN, data={}, options=validated[DOMAIN])
     await _setup_entry(hass, entry)
 
-    manager = hass.data[DOMAIN][entry.entry_id]["manager"]
+    manager = entry.runtime_data
     room = manager.rooms["bedroom"]
     assert room.presence_sensor_id == "binary_sensor.bedroom_presence"
     assert room.light_entities == ["light.bedroom_lamp"]
@@ -55,7 +56,7 @@ async def test_setup_entry_full(hass: HomeAssistant, full_config: dict) -> None:
     entry = MockConfigEntry(domain=DOMAIN, data={}, options=validated[DOMAIN])
     await _setup_entry(hass, entry)
 
-    manager = hass.data[DOMAIN][entry.entry_id]["manager"]
+    manager = entry.runtime_data
     room = manager.rooms["bedroom"]
     assert room.has_bed_sensor
     assert room.bed_sensor_id == "binary_sensor.bed_occupancy"
@@ -83,7 +84,7 @@ async def test_setup_entry_empty(hass: HomeAssistant) -> None:
     )
     await _setup_entry(hass, entry)
 
-    manager = hass.data[DOMAIN][entry.entry_id]["manager"]
+    manager = entry.runtime_data
     assert len(manager.rooms) == 0
 
     assert await hass.config_entries.async_unload(entry.entry_id)
@@ -95,7 +96,7 @@ async def test_room_tuning_change_applies_in_place(hass: HomeAssistant, full_con
     entry = MockConfigEntry(domain=DOMAIN, data={}, options=validated[DOMAIN])
     await _setup_entry(hass, entry)
 
-    manager_before = hass.data[DOMAIN][entry.entry_id]["manager"]
+    manager_before = entry.runtime_data
     room = manager_before.rooms["bedroom"]
     assert room.config["dim_brightness"] == 5
 
@@ -104,7 +105,7 @@ async def test_room_tuning_change_applies_in_place(hass: HomeAssistant, full_con
     hass.config_entries.async_update_entry(entry, options=new_options)
     await hass.async_block_till_done()
 
-    assert hass.data[DOMAIN][entry.entry_id]["manager"] is manager_before  # no reload
+    assert entry.runtime_data is manager_before  # no reload
     assert room.config["dim_brightness"] == 42  # applied in place
 
     assert await hass.config_entries.async_unload(entry.entry_id)
@@ -118,14 +119,14 @@ async def test_global_tuning_change_applies_in_place(
     entry = MockConfigEntry(domain=DOMAIN, data={}, options=validated[DOMAIN])
     await _setup_entry(hass, entry)
 
-    manager_before = hass.data[DOMAIN][entry.entry_id]["manager"]
+    manager_before = entry.runtime_data
 
     new_options = copy.deepcopy(dict(entry.options))
     new_options["illuminance_threshold"] = 1234
     hass.config_entries.async_update_entry(entry, options=new_options)
     await hass.async_block_till_done()
 
-    assert hass.data[DOMAIN][entry.entry_id]["manager"] is manager_before
+    assert entry.runtime_data is manager_before
     assert manager_before.illuminance_threshold == 1234
 
     assert await hass.config_entries.async_unload(entry.entry_id)
@@ -137,14 +138,14 @@ async def test_structural_change_triggers_reload(hass: HomeAssistant, full_confi
     entry = MockConfigEntry(domain=DOMAIN, data={}, options=validated[DOMAIN])
     await _setup_entry(hass, entry)
 
-    manager_before = hass.data[DOMAIN][entry.entry_id]["manager"]
+    manager_before = entry.runtime_data
 
     new_options = copy.deepcopy(dict(entry.options))
     new_options["rooms"]["bedroom"]["lights"] = ["light.new_lamp"]
     hass.config_entries.async_update_entry(entry, options=new_options)
     await hass.async_block_till_done()
 
-    manager_after = hass.data[DOMAIN][entry.entry_id]["manager"]
+    manager_after = entry.runtime_data
     assert manager_after is not manager_before  # reloaded
     assert manager_after.rooms["bedroom"].light_entities == ["light.new_lamp"]
 
@@ -219,3 +220,15 @@ def test_config_schema_defaults() -> None:
     assert room["bed_return_timeout"] == 180
     assert room["fans"] == []
     assert room["speakers"] == []
+
+
+async def test_invalid_options_fail_setup(hass: HomeAssistant) -> None:
+    """Stored options that fail the schema put the entry into a setup error, not a crash."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        options={"rooms": {"bedroom": {"sensors": {"presence": "binary_sensor.x"}, "lights": []}}},
+    )
+    entry.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.SETUP_ERROR

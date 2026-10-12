@@ -2,50 +2,36 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_ON
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from . import RoommateConfigEntry
+from .entity import RoomEntity
 from .room import Room
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: RoommateConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    manager = hass.data[DOMAIN][entry.entry_id]["manager"]
-    async_add_entities(RoommateSensor(room) for room in manager.rooms.values())
+    async_add_entities(RoomPresenceSensor(room) for room in entry.runtime_data.rooms.values())
 
 
-class RoommateSensor(BinarySensorEntity):
+class RoomPresenceSensor(RoomEntity, BinarySensorEntity):
     """Combined presence sensor for a room (motion OR bed)."""
 
     _attr_device_class = BinarySensorDeviceClass.OCCUPANCY
-    _attr_has_entity_name = True
     _attr_name = "Presence"
-    _attr_should_poll = False
 
     def __init__(self, room: Room) -> None:
-        self._room = room
-        self._attr_unique_id = f"{DOMAIN}_{room.name}_presence"
-        room.presence_entity = self
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._room.name)},
-            name=f"Roommate {self._room.name.replace('_', ' ').title()}",
-            manufacturer="Roommate",
-            model="Roommate",
-        )
+        super().__init__(room, "presence")
 
     @property
     def is_on(self) -> bool:
@@ -53,16 +39,11 @@ class RoommateSensor(BinarySensorEntity):
 
     @property
     def icon(self) -> str:
-        bed_id = self._room.bed_sensor_id
-        if bed_id:
-            bed_state = self.hass.states.get(bed_id)
-            if bed_state and bed_state.state == STATE_ON:
-                return "mdi:bed"
-        return "mdi:motion-sensor"
+        return "mdi:bed" if self._room.is_in_bed else "mdi:motion-sensor"
 
     @property
-    def extra_state_attributes(self) -> dict:
-        attrs = {"room": self._room.name}
+    def extra_state_attributes(self) -> dict[str, Any]:
+        attrs: dict[str, Any] = {"room": self._room.name}
         if self._room.has_bed_sensor:
             attrs["in_bed"] = self._room.is_in_bed
             attrs["occupants"] = self._room.get_occupant_count()

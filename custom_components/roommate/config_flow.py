@@ -169,8 +169,7 @@ class RoomSetupMixin:
             return self._save_room()
 
         suggested = {
-            key: self._room_data.get(key, default)
-            for key, (default, *_rest) in TUNING_PARAMS.items()
+            key: self._room_data.get(key, param.default) for key, param in TUNING_PARAMS.items()
         }
 
         return self.async_show_form(
@@ -454,13 +453,13 @@ def _room_selector(rooms: dict) -> SelectSelector:
 def _tuning_schema() -> vol.Schema:
     """Build the tuning parameter schema from the central TUNING_PARAMS table."""
     fields: dict = {}
-    for key, (default, low, high, unit, _name) in TUNING_PARAMS.items():
-        fields[vol.Optional(key, default=default)] = NumberSelector(
+    for key, param in TUNING_PARAMS.items():
+        fields[vol.Optional(key, default=param.default)] = NumberSelector(
             {
-                "min": low,
-                "max": high,
-                "step": 1,
-                "unit_of_measurement": unit,
+                "min": param.minimum,
+                "max": param.maximum,
+                "step": param.step,
+                "unit_of_measurement": param.unit,
                 "mode": "box",
             }
         )

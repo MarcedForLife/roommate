@@ -20,6 +20,7 @@ from homeassistant.core import (
     State,
     callback,
 )
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
@@ -48,14 +49,12 @@ from .const import (
     CONF_TRANSITION_OFF,
     CONF_TRANSITION_ON,
     CONF_WAKE_TRANSITION,
+    DOMAIN,
     RECENTLY_ON_OFF_TRANSITION,
 )
 
 if TYPE_CHECKING:
-    from .binary_sensor import RoommateSensor
     from .manager import RoommateManager
-    from .sensor import RoomDiagnosticSensor
-    from .switch import BedAutomationsSwitch, IlluminanceGateSwitch, PresenceLightingSwitch
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -91,13 +90,6 @@ class Room:
         self._pre_exit_snapshot: dict[str, Any] | None = None
         self._our_context_ids: set[str] = set()
         self._our_context_order: deque[str] = deque(maxlen=MAX_CONTEXTS)
-
-        # Entity references (set during platform setup)
-        self.presence_entity: RoommateSensor | None = None
-        self.presence_lighting_switch: PresenceLightingSwitch | None = None
-        self.bed_automations_switch: BedAutomationsSwitch | None = None
-        self.illuminance_gate_switch: IlluminanceGateSwitch | None = None
-        self.diagnostic_entity: RoomDiagnosticSensor | None = None
 
     @property
     def _bed_sensors(self) -> dict[str, Any]:
@@ -206,6 +198,16 @@ class Room:
     @property
     def snapshot_active(self) -> bool:
         return self._pre_exit_snapshot is not None
+
+    @property
+    def update_signal(self) -> str:
+        """Dispatcher signal this room's entities subscribe to for state writes."""
+        return f"{DOMAIN}_{self.name}_update"
+
+    @callback
+    def notify_entities(self) -> None:
+        """Ask every entity of this room to write its current state."""
+        async_dispatcher_send(self.hass, self.update_signal)
 
     def is_lights_on(self) -> bool:
         return any(_entity_is_on(self.hass, light) for light in self.light_entities)
@@ -366,10 +368,7 @@ class Room:
             self._start_presence_off_timer()
             self._start_presence_reset_timer()
 
-        if self.presence_entity:
-            self.presence_entity.async_write_ha_state()
-        if self.diagnostic_entity:
-            self.diagnostic_entity.async_write_ha_state()
+        self.notify_entities()
 
     def _begin_getting_in_bed(self) -> None:
         """Schedule bed-entry actions: room dimming, plus (for binary beds) the
@@ -392,8 +391,7 @@ class Room:
             if self._bed_automations_enabled:
                 self._start_bed_exit_timer()
 
-        if self.diagnostic_entity:
-            self.diagnostic_entity.async_write_ha_state()
+        self.notify_entities()
 
     @callback
     def handle_occupant_change(self, old: str, new: str) -> None:
@@ -423,8 +421,7 @@ class Room:
                 self.hass.async_create_task(self._manager.async_on_waking(self))
                 self.hass.async_create_task(self._manager.async_on_everyone_up(self))
 
-        if self.diagnostic_entity:
-            self.diagnostic_entity.async_write_ha_state()
+        self.notify_entities()
 
     @callback
     def handle_light_change(self, old: str, new: str, context: Context | None) -> None:
@@ -443,10 +440,7 @@ class Room:
         else:
             return
 
-        if self.presence_lighting_switch:
-            self.presence_lighting_switch.async_write_ha_state()
-        if self.diagnostic_entity:
-            self.diagnostic_entity.async_write_ha_state()
+        self.notify_entities()
 
     async def _on_presence_detected(self) -> None:
         if not self._presence_lighting_enabled:
@@ -546,8 +540,7 @@ class Room:
         coros: list = []
 
         self.set_presence_lighting_enabled(True)
-        if self.presence_lighting_switch:
-            self.presence_lighting_switch.async_write_ha_state()
+        self.notify_entities()
 
         if self.is_lights_on():
             if self.al_switch_id and self.light_entities:
@@ -686,8 +679,7 @@ class Room:
         if speakers_to_stop:
             self.hass.async_create_task(self._stop_speakers(speakers_to_stop))
 
-        if self.diagnostic_entity:
-            self.diagnostic_entity.async_write_ha_state()
+        self.notify_entities()
         _LOGGER.debug("Room %s: state snapshot expired", self.name)
 
     async def _stop_speakers(self, speaker_ids: list[str]) -> None:
@@ -789,10 +781,7 @@ class Room:
         )
         if not self._presence_lighting_enabled:
             self.set_presence_lighting_enabled(True)
-            if self.presence_lighting_switch:
-                self.presence_lighting_switch.async_write_ha_state()
-            if self.diagnostic_entity:
-                self.diagnostic_entity.async_write_ha_state()
+            self.notify_entities()
 
         if not full_reset:
             return

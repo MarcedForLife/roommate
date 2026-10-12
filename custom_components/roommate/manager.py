@@ -31,6 +31,8 @@ from .const import (
     CONF_SLEEP_LIGHT_TRANSITION,
     CONF_SLEEP_LIGHTS,
     CONF_SLEEP_MODES,
+    GLOBAL_TUNING_PARAMS,
+    TUNING_PARAMS,
 )
 from .room import INVALID_STATES, Room, _entity_is_on
 
@@ -46,7 +48,7 @@ class RoommateManager:
 
         self._guest_mode = False
         self._rooms: dict[str, Room] = {}
-        self._entity_map: dict[str, list[tuple[Room, str]]] = {}
+        self.entity_map: dict[str, list[tuple[Room, str]]] = {}
         self._unsub_listeners: list[CALLBACK_TYPE] = []
 
         for name, room_config in config[CONF_ROOMS].items():
@@ -68,6 +70,11 @@ class RoommateManager:
     @property
     def rooms(self) -> dict[str, Room]:
         return self._rooms
+
+    @property
+    def config(self) -> dict[str, Any]:
+        """Live validated config. Tuning values are updated in place."""
+        return self._config
 
     @property
     def guest_mode(self) -> bool:
@@ -96,16 +103,19 @@ class RoommateManager:
     def illuminance_threshold(self) -> float:
         return self._config[CONF_ILLUMINANCE_THRESHOLD]
 
-    def update_config(self, key: str, value: Any) -> None:
-        """Update a global config value in memory."""
-        self._config[key] = value
-
-    def get_config(self, key: str, default: Any = None) -> Any:
-        """Read a global config value."""
-        return self._config.get(key, default)
+    def apply_tuning(self, config: dict[str, Any]) -> None:
+        """Copy tuning values from a validated config into the live manager and rooms."""
+        for key in GLOBAL_TUNING_PARAMS:
+            self._config[key] = config[key]
+        for name, room_config in config[CONF_ROOMS].items():
+            if (room := self._rooms.get(name)) is None:
+                continue
+            for key in TUNING_PARAMS:
+                room.config[key] = room_config[key]
+            room.notify_entities()
 
     def _register(self, entity_id: str, room: Room, role: str) -> None:
-        self._entity_map.setdefault(entity_id, []).append((room, role))
+        self.entity_map.setdefault(entity_id, []).append((room, role))
 
     async def _call_service(
         self,
@@ -138,7 +148,7 @@ class RoommateManager:
 
     async def async_setup(self) -> None:
         """Subscribe to state changes and initialize room states."""
-        entity_ids = list(self._entity_map)
+        entity_ids = list(self.entity_map)
         if entity_ids:
             self._unsub_listeners.append(
                 async_track_state_change_event(self.hass, entity_ids, self._handle_state_change)
@@ -164,20 +174,17 @@ class RoommateManager:
         #    for the recovered roles.
         if old_state is None or old_state.state in INVALID_STATES:
             room_roles: dict[Room, set[str]] = {}
-            for room, role in self._entity_map.get(event.data["entity_id"], []):
+            for room, role in self.entity_map.get(event.data["entity_id"], []):
                 room_roles.setdefault(room, set()).add(role)
             for room, roles in room_roles.items():
                 if old_state is not None:
                     room.resync(roles)
                     continue
                 room.initialize_state()
-                if room.presence_entity:
-                    room.presence_entity.async_write_ha_state()
-                if room.diagnostic_entity:
-                    room.diagnostic_entity.async_write_ha_state()
+                room.notify_entities()
             return
 
-        for room, role in self._entity_map.get(event.data["entity_id"], []):
+        for room, role in self.entity_map.get(event.data["entity_id"], []):
             if role == "presence":
                 room.handle_presence_change()
             elif role == "bed":
