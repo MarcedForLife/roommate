@@ -92,7 +92,9 @@
       }
     },
     "error": {
+      "bed_requires_sensor": "Bed configuration requires at least a presence or occupants sensor.",
       "invalid_name": "Invalid room name. Use letters, numbers, and spaces.",
+      "lights_required": "Select at least one light.",
       "room_exists": "A room with this name already exists."
     },
     "abort": {
@@ -207,6 +209,7 @@
     "error": {
       "bed_requires_sensor": "Bed configuration requires at least a presence or occupants sensor.",
       "invalid_name": "Invalid room name. Use letters, numbers, and spaces.",
+      "lights_required": "Select at least one light.",
       "room_exists": "A room with this name already exists."
     }
   }
