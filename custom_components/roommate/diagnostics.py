@@ -4,20 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from .const import DOMAIN
+from . import RoommateConfigEntry
 
 
 async def async_get_config_entry_diagnostics(
-    hass: HomeAssistant, entry: ConfigEntry
+    hass: HomeAssistant, entry: RoommateConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a Roommate config entry."""
-    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    if entry_data is None or "manager" not in entry_data:
-        return {"error": "integration not initialized"}
-    manager = entry_data["manager"]
+    manager = entry.runtime_data
 
     rooms: dict[str, Any] = {}
     for name, room in manager.rooms.items():
@@ -38,9 +34,10 @@ async def async_get_config_entry_diagnostics(
             "snapshot_active": room.snapshot_active,
         }
 
-    entity_map: dict[str, list[dict[str, str]]] = {}
-    for entity_id, bindings in manager._entity_map.items():
-        entity_map[entity_id] = [{"room": room.name, "role": role} for room, role in bindings]
+    entity_map = {
+        entity_id: [{"room": room.name, "role": role} for room, role in bindings]
+        for entity_id, bindings in manager.entity_map.items()
+    }
 
     return {
         "config": dict(entry.options),

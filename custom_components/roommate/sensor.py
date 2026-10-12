@@ -5,42 +5,33 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, STATE_EMPTY, STATE_IN_BED, STATE_PRESENT
+from . import RoommateConfigEntry
+from .const import STATE_EMPTY, STATE_IN_BED, STATE_PRESENT
+from .entity import RoomEntity
 from .room import Room
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: RoommateConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    manager = hass.data[DOMAIN][entry.entry_id]["manager"]
-    async_add_entities(RoomDiagnosticSensor(room) for room in manager.rooms.values())
+    async_add_entities(RoomDiagnosticSensor(room) for room in entry.runtime_data.rooms.values())
 
 
-class RoomDiagnosticSensor(SensorEntity):
+class RoomDiagnosticSensor(RoomEntity, SensorEntity):
     """Room state (empty, present, or in_bed) with automation and timer details."""
 
-    _attr_has_entity_name = True
     _attr_name = "Room State"
     _attr_icon = "mdi:information-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_should_poll = False
 
     def __init__(self, room: Room) -> None:
-        self._room = room
-        self._attr_unique_id = f"{DOMAIN}_{room.name}_room_state"
-        room.diagnostic_entity = self
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(identifiers={(DOMAIN, self._room.name)})
+        super().__init__(room, "room_state")
 
     @property
     def native_value(self) -> str:

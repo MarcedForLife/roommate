@@ -3,43 +3,34 @@
 from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from . import RoommateConfigEntry
+from .entity import RoomEntity
 from .room import Room
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: RoommateConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    manager = hass.data[DOMAIN][entry.entry_id]["manager"]
     async_add_entities(
         RestoreAutoBrightnessButton(room)
-        for room in manager.rooms.values()
-        if room.al_switch_id and room.light_entities
+        for room in entry.runtime_data.rooms.values()
+        if room.al_switch_id
     )
 
 
-class RestoreAutoBrightnessButton(ButtonEntity):
+class RestoreAutoBrightnessButton(RoomEntity, ButtonEntity):
     """Button to restore adaptive lighting auto-brightness for a room."""
 
-    _attr_has_entity_name = True
     _attr_name = "Restore Auto Brightness"
     _attr_icon = "mdi:brightness-auto"
-    _attr_should_poll = False
 
     def __init__(self, room: Room) -> None:
-        self._room = room
-        self._attr_unique_id = f"{DOMAIN}_{room.name}_restore_auto_brightness"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(identifiers={(DOMAIN, self._room.name)})
+        super().__init__(room, "restore_auto_brightness")
 
     async def async_press(self) -> None:
         await self._room.restore_adaptive_lighting()

@@ -2,68 +2,99 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
-from homeassistant.components.switch import SwitchEntity
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN
+from . import RoommateConfigEntry
+from .entity import GlobalEntity, RoomEntity
 from .manager import RoommateManager
 from .room import Room
 
 
+@dataclass(frozen=True, kw_only=True)
+class RoomSwitchDescription(SwitchEntityDescription):
+    """Describes a per-room toggle backed by a Room setter."""
+
+    is_on_fn: Callable[[Room], bool]
+    set_fn: Callable[[Room, bool], None]
+    exists_fn: Callable[[Room], bool] = lambda room: True
+
+
+ROOM_SWITCHES: tuple[RoomSwitchDescription, ...] = (
+    RoomSwitchDescription(
+        key="presence_automations",
+        name="Presence Automations",
+        icon="mdi:motion-sensor",
+        is_on_fn=lambda room: room.presence_lighting_enabled,
+        set_fn=Room.set_presence_lighting_enabled,
+    ),
+    RoomSwitchDescription(
+        key="bed_automations",
+        name="Bed Automations",
+        icon="mdi:bed",
+        is_on_fn=lambda room: room.bed_automations_enabled,
+        set_fn=Room.set_bed_automations_enabled,
+        exists_fn=lambda room: room.has_bed_sensor,
+    ),
+    RoomSwitchDescription(
+        key="illuminance_gating",
+        name="Illuminance Gating",
+        icon="mdi:brightness-6",
+        is_on_fn=lambda room: room.illuminance_gate_enabled,
+        set_fn=Room.set_illuminance_gate_enabled,
+        exists_fn=lambda room: room.illuminance_sensor_id is not None,
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: RoommateConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    manager = hass.data[DOMAIN][entry.entry_id]["manager"]
+    manager = entry.runtime_data
     entities: list[SwitchEntity] = [GuestModeSwitch(manager)]
-
     for room in manager.rooms.values():
-        entities.append(PresenceLightingSwitch(room))
-        if room.has_bed_sensor:
-            entities.append(BedAutomationsSwitch(room))
-        if room.illuminance_sensor_id:
-            entities.append(IlluminanceGateSwitch(room))
-
+        entities.extend(
+            RoomSwitch(room, description)
+            for description in ROOM_SWITCHES
+            if description.exists_fn(room)
+        )
     async_add_entities(entities)
 
 
-class GuestModeSwitch(SwitchEntity, RestoreEntity):
+def _restored_toggle_state(last_state: Any) -> bool | None:
+    """Translate a restored state into a toggle value, or None when it carries no answer."""
+    if last_state is None or last_state.state not in (STATE_ON, STATE_OFF):
+        return None
+    return last_state.state == STATE_ON
+
+
+class GuestModeSwitch(GlobalEntity, SwitchEntity, RestoreEntity):
     """Global toggle to suppress sleep light activation when guests are present."""
 
-    _attr_has_entity_name = True
     _attr_name = "Guest Mode"
     _attr_icon = "mdi:account-group"
-    _attr_should_poll = False
 
     def __init__(self, manager: RoommateManager) -> None:
-        self._manager = manager
-        self._attr_unique_id = f"{DOMAIN}_guest_mode"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(
-            identifiers={(DOMAIN, "global")},
-            name="Roommate",
-            manufacturer="Roommate",
-            model="Roommate",
-        )
+        super().__init__(manager, "guest_mode")
 
     @property
     def is_on(self) -> bool:
         return self._manager.guest_mode
 
     async def async_added_to_hass(self) -> None:
-        last_state = await self.async_get_last_state()
-        if last_state is not None and last_state.state in (STATE_ON, STATE_OFF):
-            self._manager.set_guest_mode(last_state.state == STATE_ON)
+        await super().async_added_to_hass()
+        restored = _restored_toggle_state(await self.async_get_last_state())
+        if restored is not None:
+            self._manager.set_guest_mode(restored)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         self._manager.set_guest_mode(True)
@@ -74,118 +105,31 @@ class GuestModeSwitch(SwitchEntity, RestoreEntity):
         self.async_write_ha_state()
 
 
-class PresenceLightingSwitch(SwitchEntity, RestoreEntity):
-    """Toggle for presence-based lighting in a room."""
+class RoomSwitch(RoomEntity, SwitchEntity, RestoreEntity):
+    """Per-room toggle whose state lives on the Room."""
 
-    _attr_has_entity_name = True
-    _attr_name = "Presence Automations"
-    _attr_icon = "mdi:motion-sensor"
-    _attr_should_poll = False
+    entity_description: RoomSwitchDescription
 
-    def __init__(self, room: Room) -> None:
-        self._room = room
-        self._attr_unique_id = f"{DOMAIN}_{room.name}_presence_automations"
-        room.presence_lighting_switch = self
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(identifiers={(DOMAIN, self._room.name)})
+    def __init__(self, room: Room, description: RoomSwitchDescription) -> None:
+        super().__init__(room, description.key)
+        self.entity_description = description
 
     @property
     def is_on(self) -> bool:
-        return self._room.presence_lighting_enabled
+        return self.entity_description.is_on_fn(self._room)
 
     async def async_added_to_hass(self) -> None:
-        last_state = await self.async_get_last_state()
-        if last_state is not None and last_state.state in (STATE_ON, STATE_OFF):
-            self._room.set_presence_lighting_enabled(last_state.state == STATE_ON)
+        await super().async_added_to_hass()
+        restored = _restored_toggle_state(await self.async_get_last_state())
+        if restored is not None:
+            self.entity_description.set_fn(self._room, restored)
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        self._room.set_presence_lighting_enabled(True)
-        self.async_write_ha_state()
-        if self._room.diagnostic_entity:
-            self._room.diagnostic_entity.async_write_ha_state()
+        self._set(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        self._room.set_presence_lighting_enabled(False)
-        self.async_write_ha_state()
-        if self._room.diagnostic_entity:
-            self._room.diagnostic_entity.async_write_ha_state()
+        self._set(False)
 
-
-class BedAutomationsSwitch(SwitchEntity, RestoreEntity):
-    """Toggle for bed-related automations in a room."""
-
-    _attr_has_entity_name = True
-    _attr_name = "Bed Automations"
-    _attr_icon = "mdi:bed"
-    _attr_should_poll = False
-
-    def __init__(self, room: Room) -> None:
-        self._room = room
-        self._attr_unique_id = f"{DOMAIN}_{room.name}_bed_automations"
-        room.bed_automations_switch = self
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(identifiers={(DOMAIN, self._room.name)})
-
-    @property
-    def is_on(self) -> bool:
-        return self._room.bed_automations_enabled
-
-    async def async_added_to_hass(self) -> None:
-        last_state = await self.async_get_last_state()
-        if last_state is not None and last_state.state in (STATE_ON, STATE_OFF):
-            self._room.set_bed_automations_enabled(last_state.state == STATE_ON)
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        self._room.set_bed_automations_enabled(True)
-        self.async_write_ha_state()
-        if self._room.diagnostic_entity:
-            self._room.diagnostic_entity.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        self._room.set_bed_automations_enabled(False)
-        self.async_write_ha_state()
-        if self._room.diagnostic_entity:
-            self._room.diagnostic_entity.async_write_ha_state()
-
-
-class IlluminanceGateSwitch(SwitchEntity, RestoreEntity):
-    """Toggle to gate room lighting by ambient illuminance. Off = always turn on."""
-
-    _attr_has_entity_name = True
-    _attr_name = "Illuminance Gating"
-    _attr_icon = "mdi:brightness-6"
-    _attr_should_poll = False
-
-    def __init__(self, room: Room) -> None:
-        self._room = room
-        self._attr_unique_id = f"{DOMAIN}_{room.name}_illuminance_gating"
-        room.illuminance_gate_switch = self
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        return DeviceInfo(identifiers={(DOMAIN, self._room.name)})
-
-    @property
-    def is_on(self) -> bool:
-        return self._room.illuminance_gate_enabled
-
-    async def async_added_to_hass(self) -> None:
-        last_state = await self.async_get_last_state()
-        if last_state is not None and last_state.state in (STATE_ON, STATE_OFF):
-            self._room.set_illuminance_gate_enabled(last_state.state == STATE_ON)
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        self._room.set_illuminance_gate_enabled(True)
-        self.async_write_ha_state()
-        if self._room.diagnostic_entity:
-            self._room.diagnostic_entity.async_write_ha_state()
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        self._room.set_illuminance_gate_enabled(False)
-        self.async_write_ha_state()
-        if self._room.diagnostic_entity:
-            self._room.diagnostic_entity.async_write_ha_state()
+    def _set(self, enabled: bool) -> None:
+        self.entity_description.set_fn(self._room, enabled)
+        self._room.notify_entities()
