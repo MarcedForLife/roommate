@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Source of the Roommate logo. brand/render.py outlines the wordmark from brand/fonts and
+     writes the PNGs Home Assistant and the README show, sized to the outlined text. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1580 256" width="1580" height="256" role="img" aria-labelledby="title">
+  <title id="title">Roommate</title>
+  <defs>
+    <linearGradient id="orange" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF9B32"/>
+      <stop offset=".52" stop-color="#FB7C20"/>
+      <stop offset="1" stop-color="#F26B18"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="54" fill="url(#orange)"/>
+  <!-- The icon's mark at half size. Keep these paths equal to brand/icon.svg. -->
+  <g transform="scale(0.5) translate(8 0)">
+    <path d="M147.228 85.202 A20 20 0 0 1 166.037 72 L288.929 72 A20 20 0 0 1 305.878 81.382 L392.49 219.629 A12 12 0 0 1 382.321 238 L109.097 238 A12 12 0 0 1 97.812 221.921 L147.228 85.202 Z" fill="#FFF9ED"/>
+    <path d="M192 319.277 L192 426 A14 14 0 0 1 178 440 L106 440 A14 14 0 0 1 92 426 L92 270 A14 14 0 0 1 106 256 L158.804 256 A12 12 0 0 1 170.696 266.4 A78 78 0 0 0 186.824 304.388 A24 24 0 0 1 192 319.277 Z" fill="#FFF9ED"/>
+    <path d="M325.942 323 L379.636 416 A16 16 0 0 1 365.779 440 L324.21 440 A16 16 0 0 1 310.354 432 L267.053 357 A20 20 0 0 1 276.95 328.429 A78 78 0 0 0 296.25 317.286 A20 20 0 0 1 325.942 323 Z" fill="#FFF9ED"/>
+    <path d="M188 256 H308 A60 60 0 0 1 188 256 Z" fill="#FFDD68"/>
+  </g>
+  <!-- Fredoka Bold in the badge's deep orange, x-height centred on the badge, so one logo
+       reads on light and dark grounds alike. -->
+  <text x="326" y="170" font-family="Fredoka" font-size="168" font-weight="700" letter-spacing="0" fill="#F26B18">roommate</text>
+</svg>
