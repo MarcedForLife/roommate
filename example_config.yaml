@@ -1,12 +1,13 @@
-# Example Roommate configuration.
-# Add this to your configuration.yaml.
+# Initial YAML import for Roommate. Replace the entity IDs before use.
+# After import, manage settings through the integration's UI.
 
 roommate:
-  illuminance_sensor: sensor.illuminance
-  illuminance_threshold: 4000
+  illuminance_sensor: sensor.illuminance  # Optional global fallback
+  illuminance_threshold: 4000            # Lux
+  sleep_light_transition: 5              # Seconds
   sleep_lights:
     - entity_id: light.living_room_lights
-      inhibit:
+      inhibit:                          # Skip activation while any is on
         - switch.theatre_lighting
     - light.toilet_light
   sleep_modes:
@@ -15,38 +16,43 @@ roommate:
   rooms:
     bedroom:
       sensors:
-        presence: binary_sensor.bedroom_presence_sensor_presence
-        illuminance: sensor.bedroom_lux       # Optional, overrides global
-        bed:
-          presence: binary_sensor.bed_presence_sensor_occupancy
-          occupants: sensor.bed_presence_sensor_occupants
-          persons:
+        presence: binary_sensor.bedroom_presence  # Required
+        illuminance: sensor.bedroom_lux           # Optional global override
+        bed:                                     # Optional
+          # Configure presence, occupants, or both.
+          presence: binary_sensor.bed_occupancy
+          occupants: sensor.bed_occupant_count
+          persons:                               # Enable household sleep tracking
             - person.alice
             - person.bob
-      lights:
+      lights:                                    # At least one required
         - light.bedside_lamp_1
         - light.bedside_lamp_2
-      fans:
-        - fan.bedroom_fan_1
-        - fan.bedroom_fan_2
-      speakers:
+      fans:                                      # Optional
+        - fan.bedroom_fan
+      speakers:                                  # Optional
         - media_player.bedroom_speaker
-      adaptive_lighting:
+      adaptive_lighting:                         # Optional
         switch: switch.adaptive_lighting_bedroom
         sleep_mode: switch.adaptive_lighting_sleep_mode_bedroom
-      wake_transition: 60
-      dim_brightness: 5
-      recently_on_threshold: 8
-      transition_on: 2
-      transition_off: 5
-      bed_exit_delay: 10
-      bed_return_timeout: 180
-      illuminance_threshold: 200              # Lux override; 0 means use global
 
-    # Example: a guest bedroom with only a motion sensor and lights
-    # guest_bedroom:
-    #   sensors:
-    #     presence: binary_sensor.guest_bedroom_presence_sensor_presence
-    #   lights:
-    #     - light.guest_lamp
-    #   dim_brightness: 15
+      # Optional tuning values, shown with defaults.
+      dim_brightness: 5             # Percent on bed entry
+      recently_on_threshold: 8      # Seconds, turn off instead of dimming
+      transition_on: 2              # Seconds
+      transition_off: 5             # Seconds
+      transition_dim: 5             # Seconds
+      wake_transition: 60           # Seconds, fade on after bed exit
+      bed_exit_delay: 10            # Seconds, debounce bed exit
+      bed_return_timeout: 180       # Seconds, restore state on return, 0 disables
+      presence_off_delay: 0         # Seconds, debounce lights off
+      presence_reset_timeout: 0     # Minutes vacant before lifting an override
+      room_reset_timeout: 0         # Minutes vacant before full reset, takes precedence
+      illuminance_threshold: 0      # Lux, 0 uses the global threshold
+
+    # A room needs only a presence sensor and lights.
+    guest_bedroom:
+      sensors:
+        presence: binary_sensor.guest_bedroom_presence
+      lights:
+        - light.guest_lamp
