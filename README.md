@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/MarcedForLife/roommate/main/custom_components/roommate/brand/logo.png" alt="Roommate" width="240">
+<img src="https://raw.githubusercontent.com/MarcedForLife/roommate/main/custom_components/roommate/brand/dark_logo.png" alt="Roommate" width="240">
 
 [![GitHub Release](https://img.shields.io/github/v/release/MarcedForLife/roommate.svg?style=flat)](https://github.com/MarcedForLife/roommate/releases)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat)](https://github.com/hacs/integration)
