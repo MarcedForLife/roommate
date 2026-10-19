@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 DOMAIN = "roommate"
 
 # Top-level config keys
@@ -57,19 +59,41 @@ STATE_EMPTY = "empty"
 STATE_PRESENT = "present"
 STATE_IN_BED = "in_bed"
 
-# Room tuning parameters, keyed by config name: (default, min, max, unit, display name).
-# Used by the YAML schema, config flow, number entities, and _apply_defaults.
-TUNING_PARAMS: dict[str, tuple[int, int, int, str, str]] = {
-    CONF_DIM_BRIGHTNESS: (5, 1, 100, "%", "Dim Brightness"),
-    CONF_RECENTLY_ON_THRESHOLD: (8, 0, 60, "s", "Recently-on Threshold"),
-    CONF_TRANSITION_ON: (2, 0, 30, "s", "Turn On Transition"),
-    CONF_TRANSITION_OFF: (5, 0, 30, "s", "Turn Off Transition"),
-    CONF_TRANSITION_DIM: (5, 0, 30, "s", "Dim Transition"),
-    CONF_BED_EXIT_DELAY: (10, 0, 120, "s", "Bed Exit Delay"),
-    CONF_BED_RETURN_TIMEOUT: (180, 0, 600, "s", "Quick-return Timeout"),
-    CONF_PRESENCE_OFF_DELAY: (0, 0, 120, "s", "Presence Off Delay"),
-    CONF_PRESENCE_RESET_TIMEOUT: (0, 0, 1440, "min", "Presence Reset Timeout"),
-    CONF_ROOM_RESET_TIMEOUT: (0, 0, 1440, "min", "Room Reset Timeout"),
-    CONF_WAKE_TRANSITION: (60, 0, 300, "s", "Wake Transition"),
-    CONF_ILLUMINANCE_THRESHOLD: (0, 0, 100000, "lx", "Illuminance Threshold"),
+
+class TuningParam(NamedTuple):
+    """Bounds and presentation of a numeric setting exposed as a number entity."""
+
+    default: int
+    minimum: int
+    maximum: int
+    unit: str
+    name: str
+    step: int = 1
+
+
+# Room tuning parameters, keyed by config name. Drives the YAML schema, the config
+# flow, the number entities, and in-place tuning updates.
+TUNING_PARAMS: dict[str, TuningParam] = {
+    CONF_DIM_BRIGHTNESS: TuningParam(5, 1, 100, "%", "Dim Brightness"),
+    CONF_RECENTLY_ON_THRESHOLD: TuningParam(8, 0, 60, "s", "Recently-on Threshold"),
+    CONF_TRANSITION_ON: TuningParam(2, 0, 30, "s", "Turn On Transition"),
+    CONF_TRANSITION_OFF: TuningParam(5, 0, 30, "s", "Turn Off Transition"),
+    CONF_TRANSITION_DIM: TuningParam(5, 0, 30, "s", "Dim Transition"),
+    CONF_BED_EXIT_DELAY: TuningParam(10, 0, 120, "s", "Bed Exit Delay"),
+    CONF_BED_RETURN_TIMEOUT: TuningParam(180, 0, 600, "s", "Quick-return Timeout"),
+    CONF_PRESENCE_OFF_DELAY: TuningParam(0, 0, 120, "s", "Presence Off Delay"),
+    CONF_PRESENCE_RESET_TIMEOUT: TuningParam(0, 0, 1440, "min", "Presence Reset Timeout"),
+    CONF_ROOM_RESET_TIMEOUT: TuningParam(0, 0, 1440, "min", "Room Reset Timeout"),
+    CONF_WAKE_TRANSITION: TuningParam(60, 0, 300, "s", "Wake Transition"),
+    CONF_ILLUMINANCE_THRESHOLD: TuningParam(0, 0, 100000, "lx", "Illuminance Threshold"),
+}
+
+# Settings on the global Roommate device, same consumers as TUNING_PARAMS.
+GLOBAL_TUNING_PARAMS: dict[str, TuningParam] = {
+    CONF_ILLUMINANCE_THRESHOLD: TuningParam(
+        DEFAULT_ILLUMINANCE_THRESHOLD, 0, 100000, "lx", "Illuminance Threshold", step=100
+    ),
+    CONF_SLEEP_LIGHT_TRANSITION: TuningParam(
+        DEFAULT_SLEEP_LIGHT_TRANSITION, 0, 30, "s", "Sleep Light Transition"
+    ),
 }

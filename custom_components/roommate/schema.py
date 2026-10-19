@@ -1,4 +1,4 @@
-"""YAML validation schemas for Roommate configuration."""
+"""Validation schemas for Roommate configuration, shared by YAML import and config entries."""
 
 from __future__ import annotations
 
@@ -28,10 +28,10 @@ from .const import (
     CONF_SPEAKERS,
     CONF_SWITCH,
     CONF_TEMPERATURE,
-    DEFAULT_ILLUMINANCE_THRESHOLD,
-    DEFAULT_SLEEP_LIGHT_TRANSITION,
     DOMAIN,
+    GLOBAL_TUNING_PARAMS,
     TUNING_PARAMS,
+    TuningParam,
 )
 
 
@@ -40,6 +40,18 @@ def _validate_bed_sensors(config: dict) -> dict:
     if CONF_PRESENCE not in config and CONF_OCCUPANTS not in config:
         raise vol.Invalid("bed config requires at least 'presence' or 'occupants'")
     return config
+
+
+def _normalize_sleep_lights(config: list) -> list[dict]:
+    """Normalize sleep lights to list of dicts."""
+    return [
+        {CONF_ENTITY_ID: item, CONF_INHIBIT: []} if isinstance(item, str) else item
+        for item in config
+    ]
+
+
+def _bounded_int(param: TuningParam) -> vol.All:
+    return vol.All(vol.Coerce(int), vol.Range(min=param.minimum, max=param.maximum))
 
 
 SLEEP_LIGHT_SCHEMA = vol.Any(
@@ -51,15 +63,6 @@ SLEEP_LIGHT_SCHEMA = vol.Any(
         }
     ),
 )
-
-
-def _normalize_sleep_lights(config: list) -> list[dict]:
-    """Normalize sleep lights to list of dicts."""
-    return [
-        {CONF_ENTITY_ID: item, CONF_INHIBIT: []} if isinstance(item, str) else item
-        for item in config
-    ]
-
 
 BED_SENSORS_SCHEMA = vol.All(
     vol.Schema(
@@ -89,17 +92,6 @@ ADAPTIVE_LIGHTING_SCHEMA = vol.Schema(
     }
 )
 
-
-def _build_tuning_fields() -> dict:
-    """Generate voluptuous fields for room tuning parameters from TUNING_PARAMS."""
-    fields: dict = {}
-    for key, (default, low, high, _unit, _name) in TUNING_PARAMS.items():
-        fields[vol.Optional(key, default=default)] = vol.All(
-            vol.Coerce(int), vol.Range(min=low, max=high)
-        )
-    return fields
-
-
 ROOM_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_SENSORS): SENSORS_SCHEMA,
@@ -107,30 +99,32 @@ ROOM_SCHEMA = vol.Schema(
         vol.Optional(CONF_FANS, default=[]): vol.All(cv.ensure_list, [cv.entity_id]),
         vol.Optional(CONF_SPEAKERS, default=[]): vol.All(cv.ensure_list, [cv.entity_id]),
         vol.Optional(CONF_ADAPTIVE_LIGHTING): ADAPTIVE_LIGHTING_SCHEMA,
-        **_build_tuning_fields(),
+        **{
+            vol.Optional(key, default=param.default): _bounded_int(param)
+            for key, param in TUNING_PARAMS.items()
+        },
     }
 )
 
-CONFIG_SCHEMA = vol.Schema(
+_ILLUMINANCE_THRESHOLD = GLOBAL_TUNING_PARAMS[CONF_ILLUMINANCE_THRESHOLD]
+_SLEEP_LIGHT_TRANSITION = GLOBAL_TUNING_PARAMS[CONF_SLEEP_LIGHT_TRANSITION]
+
+# The stored config entry options, and the body of the YAML "roommate:" block.
+OPTIONS_SCHEMA = vol.Schema(
     {
-        vol.Optional(DOMAIN): vol.Schema(
-            {
-                vol.Required(CONF_ROOMS): vol.Schema({cv.slug: ROOM_SCHEMA}),
-                vol.Optional(CONF_SLEEP_LIGHTS, default=[]): vol.All(
-                    cv.ensure_list, [SLEEP_LIGHT_SCHEMA], _normalize_sleep_lights
-                ),
-                vol.Optional(CONF_SLEEP_MODES, default=[]): vol.All(cv.ensure_list, [cv.entity_id]),
-                vol.Optional(CONF_ILLUMINANCE_SENSOR): cv.entity_id,
-                vol.Optional(
-                    CONF_ILLUMINANCE_THRESHOLD,
-                    default=DEFAULT_ILLUMINANCE_THRESHOLD,
-                ): vol.All(vol.Coerce(float), vol.Range(min=0)),
-                vol.Optional(
-                    CONF_SLEEP_LIGHT_TRANSITION,
-                    default=DEFAULT_SLEEP_LIGHT_TRANSITION,
-                ): vol.All(vol.Coerce(int), vol.Range(min=0, max=30)),
-            }
-        )
-    },
-    extra=vol.ALLOW_EXTRA,
+        vol.Required(CONF_ROOMS): vol.Schema({cv.slug: ROOM_SCHEMA}),
+        vol.Optional(CONF_SLEEP_LIGHTS, default=[]): vol.All(
+            cv.ensure_list, [SLEEP_LIGHT_SCHEMA], _normalize_sleep_lights
+        ),
+        vol.Optional(CONF_SLEEP_MODES, default=[]): vol.All(cv.ensure_list, [cv.entity_id]),
+        vol.Optional(CONF_ILLUMINANCE_SENSOR): cv.entity_id,
+        vol.Optional(CONF_ILLUMINANCE_THRESHOLD, default=_ILLUMINANCE_THRESHOLD.default): vol.All(
+            vol.Coerce(float), vol.Range(min=_ILLUMINANCE_THRESHOLD.minimum)
+        ),
+        vol.Optional(
+            CONF_SLEEP_LIGHT_TRANSITION, default=_SLEEP_LIGHT_TRANSITION.default
+        ): _bounded_int(_SLEEP_LIGHT_TRANSITION),
+    }
 )
+
+CONFIG_SCHEMA = vol.Schema({vol.Optional(DOMAIN): OPTIONS_SCHEMA}, extra=vol.ALLOW_EXTRA)

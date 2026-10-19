@@ -6,29 +6,16 @@ import copy
 import logging
 from typing import Any
 
+import voluptuous as vol
 from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers.typing import ConfigType
 
-from .const import (
-    CONF_BED,
-    CONF_FANS,
-    CONF_ILLUMINANCE_THRESHOLD,
-    CONF_PERSONS,
-    CONF_ROOMS,
-    CONF_SENSORS,
-    CONF_SLEEP_LIGHT_TRANSITION,
-    CONF_SLEEP_LIGHTS,
-    CONF_SLEEP_MODES,
-    CONF_SPEAKERS,
-    DEFAULT_ILLUMINANCE_THRESHOLD,
-    DEFAULT_SLEEP_LIGHT_TRANSITION,
-    DOMAIN,
-    TUNING_PARAMS,
-)
+from .const import CONF_ROOMS, DOMAIN, GLOBAL_TUNING_PARAMS, TUNING_PARAMS
 from .manager import RoommateManager
-from .schema import CONFIG_SCHEMA  # noqa: F401 (used by HA)
+from .schema import CONFIG_SCHEMA, OPTIONS_SCHEMA  # noqa: F401 (CONFIG_SCHEMA is read by HA)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,23 +27,7 @@ PLATFORMS = [
     Platform.SWITCH,
 ]
 
-
-def _apply_defaults(config: dict[str, Any]) -> dict[str, Any]:
-    """Ensure top-level config keys exist with sensible defaults."""
-    config.setdefault(CONF_ROOMS, {})
-    config.setdefault(CONF_SLEEP_LIGHTS, [])
-    config.setdefault(CONF_SLEEP_MODES, [])
-    config.setdefault(CONF_ILLUMINANCE_THRESHOLD, DEFAULT_ILLUMINANCE_THRESHOLD)
-    config.setdefault(CONF_SLEEP_LIGHT_TRANSITION, DEFAULT_SLEEP_LIGHT_TRANSITION)
-    for room_config in config[CONF_ROOMS].values():
-        room_config.setdefault(CONF_FANS, [])
-        room_config.setdefault(CONF_SPEAKERS, [])
-        bed = room_config.get(CONF_SENSORS, {}).get(CONF_BED)
-        if bed:
-            bed.setdefault(CONF_PERSONS, [])
-        for key, (default, *_rest) in TUNING_PARAMS.items():
-            room_config.setdefault(key, default)
-    return config
+type RoommateConfigEntry = ConfigEntry[RoommateManager]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -70,27 +41,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
-def _strip_tuning(options: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy of options with all tuning fields removed for structural comparison."""
-    stripped = copy.deepcopy(dict(options))
-    for global_key in (CONF_ILLUMINANCE_THRESHOLD, CONF_SLEEP_LIGHT_TRANSITION):
-        stripped.pop(global_key, None)
-    rooms = stripped.get(CONF_ROOMS, {})
-    for room_config in rooms.values():
-        for tuning_key in TUNING_PARAMS:
-            room_config.pop(tuning_key, None)
-    return stripped
-
-
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: RoommateConfigEntry) -> bool:
     """Set up Roommate from a config entry."""
-    config = _apply_defaults(copy.deepcopy(dict(entry.options)))
-
-    manager = RoommateManager(hass, config)
-    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {
-        "manager": manager,
-        "structural_snapshot": _strip_tuning(entry.options),
-    }
+    manager = RoommateManager(hass, _validated_options(entry))
+    entry.runtime_data = manager
 
     await manager.async_setup()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -102,31 +56,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def async_unload_entry(hass: HomeAssistant, entry: RoommateConfigEntry) -> bool:
     """Unload a Roommate config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[DOMAIN][entry.entry_id]["manager"].shutdown()
-        hass.data[DOMAIN].pop(entry.entry_id)
+        entry.runtime_data.shutdown()
     return unload_ok
 
 
-async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+def _validated_options(entry: ConfigEntry) -> dict[str, Any]:
+    """Run the stored options through the schema so every default is filled in."""
+    try:
+        return OPTIONS_SCHEMA(dict(entry.options))
+    except vol.Invalid as err:
+        raise ConfigEntryError(f"Invalid Roommate configuration: {err}") from err
+
+
+def _strip_tuning(config: dict[str, Any]) -> dict[str, Any]:
+    """Copy of a validated config with tuning values removed, leaving only its structure."""
+    stripped = copy.deepcopy(config)
+    for key in GLOBAL_TUNING_PARAMS:
+        stripped.pop(key, None)
+    for room_config in stripped[CONF_ROOMS].values():
+        for key in TUNING_PARAMS:
+            room_config.pop(key, None)
+    return stripped
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: RoommateConfigEntry) -> None:
     """Reload only when structural options changed; tuning-only edits apply in place."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    new_structural = _strip_tuning(entry.options)
-    if new_structural == data["structural_snapshot"]:
-        manager: RoommateManager = data["manager"]
-        new_options = entry.options
-        for global_key in (CONF_ILLUMINANCE_THRESHOLD, CONF_SLEEP_LIGHT_TRANSITION):
-            if global_key in new_options:
-                manager.update_config(global_key, new_options[global_key])
-        for room_name, room_config in new_options.get(CONF_ROOMS, {}).items():
-            room = manager.rooms.get(room_name)
-            if room is None:
-                continue
-            for tuning_key in TUNING_PARAMS:
-                if tuning_key in room_config:
-                    room.config[tuning_key] = room_config[tuning_key]
+    manager = entry.runtime_data
+    config = _validated_options(entry)
+    if _strip_tuning(config) != _strip_tuning(manager.config):
+        await hass.config_entries.async_reload(entry.entry_id)
         return
-    data["structural_snapshot"] = new_structural
-    await hass.config_entries.async_reload(entry.entry_id)
+    manager.apply_tuning(config)
