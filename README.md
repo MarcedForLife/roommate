@@ -1,11 +1,8 @@
-<img src="custom_components/roommate/brand/icon.png"
-     alt="Roommate icon" height="55" align="right" />
+<img src="https://raw.githubusercontent.com/MarcedForLife/roommate/main/custom_components/roommate/brand/logo.png" alt="Roommate" width="240">
 
-# Roommate
-
-[![GitHub Release](https://img.shields.io/github/v/release/MarcedForLife/roommate.svg?style=flat-square)](https://github.com/MarcedForLife/roommate/releases)
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat-square)](https://github.com/hacs/integration)
-[![License](https://img.shields.io/github/license/MarcedForLife/roommate.svg?style=flat-square)](LICENSE.md)
+[![GitHub Release](https://img.shields.io/github/v/release/MarcedForLife/roommate.svg?style=flat)](https://github.com/MarcedForLife/roommate/releases)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=flat)](https://github.com/hacs/integration)
+[![License](https://img.shields.io/github/license/MarcedForLife/roommate.svg?style=flat)](LICENSE.md)
 
 Roommate is a Home Assistant integration for presence lighting and bedtime routines. Start with a presence sensor and a light. Add bed sensors to dim the lights when you get into bed, fade them on when you get up, and coordinate sleep mode across rooms.
 
@@ -118,3 +115,9 @@ uv run --no-sync pytest --cov=custom_components.roommate
 The integration source is in `custom_components/roommate`, with tests in `tests`. The development Python requirement comes from the test environment. Ruff targets Python 3.13 for compatibility with the minimum supported Home Assistant version.
 
 UI labels live in `custom_components/roommate/translations/en.json`. Shared setup and options labels appear under both `config` and `options`. Update both sections when changing them.
+
+The brand sources are in `brand`. The command below writes the icon and logo into `custom_components/roommate/brand`, which Home Assistant shows from 2026.3 and this file shows at the top.
+
+```sh
+uv run --frozen --with resvg-py --with fonttools --with uharfbuzz python brand/render.py
+```
